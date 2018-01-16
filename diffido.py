@@ -17,7 +17,7 @@ import tornado.web
 from tornado import gen, escape
 
 CONF_DIR = ''
-JOBS_STORE = 'sqlite:///jobs.db'
+JOBS_STORE = 'sqlite:///storage/jobs.db'
 API_VERSION = '1.0'
 
 
