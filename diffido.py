@@ -98,10 +98,18 @@ class TemplateHandler(BaseHandler):
         self.render(page, **self.arguments)
 
 
+def run_scheduled(id_=None, *args, **kwargs):
+    print('RUNNING %d' % id_)
+
+def run():
+    print('runno!')
+
 def serve():
     jobstores = {'default': SQLAlchemyJobStore(url=JOBS_STORE)}
     scheduler = TornadoScheduler(jobstores=jobstores)
     scheduler.start()
+    scheduler.remove_job('run')
+    #scheduler.add_job(run, 'interval', minutes=1)
 
     define("port", default=3210, help="run on the given port", type=int)
     define("address", default='', help="bind the server at the given address", type=str)
