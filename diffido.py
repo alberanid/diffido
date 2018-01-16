@@ -86,15 +86,16 @@ class BaseHandler(tornado.web.RequestHandler):
         self.write({'error': True, 'message': message})
 
 
-class RootHandler(BaseHandler):
+class TemplateHandler(BaseHandler):
     """Handler for the / path."""
     app_path = os.path.join(os.path.dirname(__file__), "dist")
 
     @gen.coroutine
     def get(self, *args, **kwargs):
-        # serve the ./dist/index.html file
-        with open(self.app_path + "/index.html", 'r') as fd:
-            self.write(fd.read())
+        page = 'index.html'
+        if args and args[0]:
+            page = args[0].strip('/')
+        self.render(page, **self.arguments)
 
 
 def serve():
@@ -128,10 +129,10 @@ def serve():
     application = tornado.web.Application([
             # (_days_path, DaysHandler, init_params),
             # (r'/v%s%s' % (API_VERSION, _days_path), DaysHandler, init_params),
-            (r"/(?:index.html)?", RootHandler, init_params),
-            (r'/?(.*)', tornado.web.StaticFileHandler, {"path": "dist"})
+            (r"/?(.*)", TemplateHandler, init_params),
         ],
         static_path=os.path.join(os.path.dirname(__file__), "dist/static"),
+        template_path=os.path.join(os.path.dirname(__file__), 'dist/'),
         debug=options.debug)
     http_server = tornado.httpserver.HTTPServer(application, ssl_options=ssl_options or None)
     logger.info('Start serving on %s://%s:%d', 'https' if ssl_options else 'http',

@@ -2,7 +2,6 @@
 node_modules/
 storage/
 __pycache__
-dist/
 npm-debug*.log
 ssl/*.pem
 *.py[cod]
