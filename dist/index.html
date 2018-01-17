@@ -3,4 +3,52 @@
 {% block body %}
 Index
 <a href="/page.html/?id=3">setting 3</a>; <a href="/diff.html?id=3">diff 3</a>
+
+<div id="app">
+    <div class="md-layout">
+        <div class="md-layout-item">
+            <md-table>
+            <md-table-row>
+                <md-table-head md-numeric>#</md-table-head>
+                <md-table-head>title</md-table-head>
+                <md-table-head>url</md-table-head>
+                <md-table-head>schedule</md-table-head>
+            </md-table-row>
+
+            {% for schedule in schedules %}
+            <md-table-row>
+                <md-table-cell md-numeric>{{ schedule['id'] }}</md-table-cell>
+                <md-table-cell>{{ schedule['title'] }}</md-table-cell>
+                <md-table-cell>{{ schedule['url'] }}</md-table-cell>
+                <md-table-cell>meh</md-table-cell>
+            </md-table-row>
+            {% end %}
+
+            </md-table>
+        </div>
+    </div>
+</div>
+
+<script>
+
+Vue.use(VueMaterial.default);
+
+var app = new Vue({
+    el: '#app'
+});
+
+</script>
+<style>
+
+body {
+    background-color: white;
+}
+
+.md-table {
+    width: 60%;
+    min-height: 200px;
+	max-height: 600px;
+}
+
+</style>
 {% end %}

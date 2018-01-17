@@ -95,7 +95,15 @@ class TemplateHandler(BaseHandler):
         page = 'index.html'
         if args and args[0]:
             page = args[0].strip('/')
-        self.render(page, **self.arguments)
+        arguments = self.arguments
+        arguments['schedules'] = [{
+            'id': 1,
+            'title': 'wikipedia',
+            'url': 'https://it.wikipedia.org/wiki/Pagina_principale',
+            'scheduling': {'interval': 5, 'unit': 'minutes'},
+            'enabled': True
+        }]
+        self.render(page, **arguments)
 
 
 def run_scheduled(id_=None, *args, **kwargs):
@@ -108,7 +116,7 @@ def serve():
     jobstores = {'default': SQLAlchemyJobStore(url=JOBS_STORE)}
     scheduler = TornadoScheduler(jobstores=jobstores)
     scheduler.start()
-    scheduler.remove_job('run')
+    #scheduler.remove_job('run')
     #scheduler.add_job(run, 'interval', minutes=1)
 
     define("port", default=3210, help="run on the given port", type=int)
