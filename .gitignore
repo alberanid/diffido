@@ -1,3 +1,4 @@
+conf/*.json
 .DS_Store
 node_modules/
 storage/

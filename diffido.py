@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import json
 import logging
 
 from tornado.ioloop import IOLoop
@@ -19,6 +20,7 @@ from tornado import gen, escape
 CONF_DIR = ''
 JOBS_STORE = 'sqlite:///storage/jobs.db'
 API_VERSION = '1.0'
+SCHEDULES_FILE = 'conf/schedules.json'
 
 
 class DiffidoBaseException(Exception):
@@ -86,6 +88,23 @@ class BaseHandler(tornado.web.RequestHandler):
         self.write({'error': True, 'message': message})
 
 
+class SchedulesHandler(BaseHandler):
+    def read_schedules(self):
+        if not os.path.isfile(SCHEDULES_FILE):
+            return {}
+        with open(SCHEDULES_FILE, 'r') as fd:
+            return json.loads(fd.read())
+
+    def write_schedules(self, schedules):
+        with open(SCHEDULES_FILE, 'w') as fd:
+            fd.write(json.dumps(schedules, indent=2))
+
+    @gen.coroutine
+    def get(self, id_=None, *args, **kwargs):
+        schedules = self.read_schedules()
+        self.write(schedules)
+
+
 class TemplateHandler(BaseHandler):
     """Handler for the / path."""
     app_path = os.path.join(os.path.dirname(__file__), "dist")
@@ -96,13 +115,6 @@ class TemplateHandler(BaseHandler):
         if args and args[0]:
             page = args[0].strip('/')
         arguments = self.arguments
-        arguments['schedules'] = [{
-            'id': 1,
-            'title': 'wikipedia',
-            'url': 'https://it.wikipedia.org/wiki/Pagina_principale',
-            'scheduling': {'interval': 5, 'unit': 'minutes'},
-            'enabled': True
-        }]
         self.render(page, **arguments)
 
 
@@ -119,14 +131,14 @@ def serve():
     #scheduler.remove_job('run')
     #scheduler.add_job(run, 'interval', minutes=1)
 
-    define("port", default=3210, help="run on the given port", type=int)
-    define("address", default='', help="bind the server at the given address", type=str)
-    define("ssl_cert", default=os.path.join(os.path.dirname(__file__), 'ssl', 'diffido_cert.pem'),
-            help="specify the SSL certificate to use for secure connections")
-    define("ssl_key", default=os.path.join(os.path.dirname(__file__), 'ssl', 'diffido_key.pem'),
-            help="specify the SSL private key to use for secure connections")
-    define("debug", default=False, help="run in debug mode")
-    define("config", help="read configuration file",
+    define('port', default=3210, help='run on the given port', type=int)
+    define('address', default='', help='bind the server at the given address', type=str)
+    define('ssl_cert', default=os.path.join(os.path.dirname(__file__), 'ssl', 'diffido_cert.pem'),
+            help='specify the SSL certificate to use for secure connections')
+    define('ssl_key', default=os.path.join(os.path.dirname(__file__), 'ssl', 'diffido_key.pem'),
+            help='specify the SSL private key to use for secure connections')
+    define('debug', default=False, help='run in debug mode')
+    define('config', help='read configuration file',
             callback=lambda path: tornado.options.parse_config_file(path, final=False))
     tornado.options.parse_command_line()
 
@@ -139,15 +151,16 @@ def serve():
     if os.path.isfile(options.ssl_key) and os.path.isfile(options.ssl_cert):
         ssl_options = dict(certfile=options.ssl_cert, keyfile=options.ssl_key)
 
-    init_params = dict(listen_port=options.port, logger=logger, ssl_options=ssl_options)
+    init_params = dict(listen_port=options.port, logger=logger, ssl_options=ssl_options,
+                       scheduler=scheduler)
 
-    # _days_path = r"/days/?(?P<day>[\d_-]+)?"
+    _schedules_path = r'schedules/?(?P<id_>\d+)?'
     application = tornado.web.Application([
-            # (_days_path, DaysHandler, init_params),
-            # (r'/v%s%s' % (API_VERSION, _days_path), DaysHandler, init_params),
-            (r"/?(.*)", TemplateHandler, init_params),
+            ('/api/%s' % _schedules_path, SchedulesHandler, init_params),
+            (r'/api/v%s/%s' % (API_VERSION, _schedules_path), SchedulesHandler, init_params),
+            (r'/?(.*)', TemplateHandler, init_params),
         ],
-        static_path=os.path.join(os.path.dirname(__file__), "dist/static"),
+        static_path=os.path.join(os.path.dirname(__file__), 'dist/static'),
         template_path=os.path.join(os.path.dirname(__file__), 'dist/'),
         debug=options.debug)
     http_server = tornado.httpserver.HTTPServer(application, ssl_options=ssl_options or None)
