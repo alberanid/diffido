@@ -4,6 +4,7 @@
 import os
 import json
 import logging
+import requests
 
 from tornado.ioloop import IOLoop
 # from lxml.html.diff import htmldiff
@@ -25,6 +26,7 @@ SCHEDULES_FILE = 'conf/schedules.json'
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
 
 def read_schedules():
     if not os.path.isfile(SCHEDULES_FILE):
@@ -63,6 +65,8 @@ def run_job(id_=None, *args, **kwargs):
     if not url:
         return
     print('Running job id:%s title:%s url: %s' % (id_, schedule.get('title', ''), url))
+    req = requests.get(url, timeout=(30.10, 240))
+    print(req.text)
 
 
 def scheduler_update(scheduler, id_):
