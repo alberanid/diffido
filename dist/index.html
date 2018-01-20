@@ -10,7 +10,7 @@
                 </md-table-toolbar>
                 <md-table-row slot="md-table-row" slot-scope="{item}">
                     <md-table-cell md-label="#" md-sort-by="id" md-numeric>${ item.id }</md-table-cell>
-                    <md-table-cell md-label="title" md-sort-by="title">${ item.title }</md-table-cell>
+                    <md-table-cell md-label="title" md-sort-by="title"><a :href="settingsUrl(item)">${ item.title }</a></md-table-cell>
                     <md-table-cell md-label="url" md-sort-by="email">${ item.url }</md-table-cell>
                 </md-table-row>
             </md-table>
@@ -31,12 +31,25 @@ var app = new Vue({
     mounted: function() {
         this.getSchedules();
     },
+    computed: {
+    },
     methods: {
+        settingsUrl: function(item) {
+            if (!(item && item.id !== undefined)) {
+                return '';
+            }
+            return '/schedule.html?id=' + item.id;
+        },
         getSchedules: function() {
             self = this;
             var data = axios.get('/api/schedules').then(function(response) {
                 console.log(response);
-                self.schedules = response.data.schedules || [];
+                var schedules = [];
+                _.forEach(response.data.schedules || {}, function(value, key) {
+                    value.id = key;
+                    schedules.push(value);
+                });
+                self.schedules = schedules;
             });
         }
     }
@@ -51,8 +64,8 @@ body {
 
 .md-table {
     width: 60%;
-    min-height: 200px;
-    max-height: 600px;
+    min-height: 400px;
+    max-height: 800px;
 }
 
 </style>

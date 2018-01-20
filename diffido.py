@@ -87,22 +87,83 @@ class BaseHandler(tornado.web.RequestHandler):
         self.set_status(status)
         self.write({'error': True, 'message': message})
 
+    def build_success(self, message='', status=200):
+        """Build and write a success message.
+
+        :param message: textual message
+        :type message: str
+        :param status: HTTP status code
+        :type status: int
+        """
+        self.set_status(status)
+        self.write({'error': False, 'message': message})
+
 
 class SchedulesHandler(BaseHandler):
     def read_schedules(self):
         if not os.path.isfile(SCHEDULES_FILE):
-            return {}
-        with open(SCHEDULES_FILE, 'r') as fd:
-            return json.loads(fd.read())
+            return {'schedules': {}}
+        try:
+            with open(SCHEDULES_FILE, 'r') as fd:
+                return json.loads(fd.read())
+        except Exception as e:
+            self.logger.error('unable to read %s: %s' % (SCHEDULES_FILE, e))
+            return {'schedules': {}}
 
     def write_schedules(self, schedules):
         with open(SCHEDULES_FILE, 'w') as fd:
             fd.write(json.dumps(schedules, indent=2))
 
+    def next_id(self, schedules):
+        ids = schedules.get('schedules', {}).keys()
+        if not ids:
+            return 1
+        return max([int(i) for i in ids]) + 1
+
+    def _get_schedule(self, id_):
+        schedules = self.read_schedules()
+        data = schedules.get('schedules', {}).get(id_, {})
+        data['id'] = str(id_)
+        return data
+
     @gen.coroutine
     def get(self, id_=None, *args, **kwargs):
+        if id_ is not None:
+            self.write({'schedule': self._get_schedule(id_)})
+            return
         schedules = self.read_schedules()
         self.write(schedules)
+
+    @gen.coroutine
+    def put(self, id_=None, *args, **kwargs):
+        if id_ is None:
+            return self.build_error(message='update action requires an ID')
+        data = self.clean_body
+        schedules = self.read_schedules()
+        if id_ not in schedules.get('schedules', {}):
+            return self.build_error(message='schedule %s not found' % id_)
+        schedules['schedules'][id_] = data
+        self.write_schedules(schedules)
+        self.write(self._get_schedule(id_=id_))
+
+    @gen.coroutine
+    def post(self, *args, **kwargs):
+        data = self.clean_body
+        schedules = self.read_schedules()
+        id_ = str(self.next_id(schedules))
+        schedules['schedules'][id_] = data
+        self.write_schedules(schedules)
+        self.write(self._get_schedule(id_=id_))
+
+    @gen.coroutine
+    def delete(self, id_=None, *args, **kwargs):
+        if id_ is None:
+            return self.build_error(message='an ID must be specified')
+        schedules = self.read_schedules()
+        if id_ in schedules.get('schedules', {}):
+            del schedules['schedules'][id_]
+            self.write_schedules(schedules)
+        self.build_success(message='removed schedule %s' % id_)
 
 
 class TemplateHandler(BaseHandler):

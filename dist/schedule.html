@@ -1,5 +1,103 @@
 {% extends "base.html" %}
 
 {% block body %}
-setting page {{ id }}
+<div id="app">
+    <div class="md-layout">
+        <div class="md-layout-item" md-card>
+            <md-field>
+                <label>title</label>
+                <md-input v-model="schedule.title"></md-input>
+            </md-field>
+            <md-field>
+                <label>url</label>
+                <md-input v-model="schedule.url"></md-input>
+            </md-field>
+            <md-field>
+                <label>notify email</label>
+                <md-input v-model="schedule.email"></md-input>
+            </md-field>
+            <md-field>
+                <label>XPath selector</label>
+                <md-input v-model="schedule.xpath"></md-input>
+            </md-field>
+            <md-field>
+                <label>minimum change</label>
+                <md-input v-model="schedule.minimum_change"></md-input>
+            </md-field>
+            <md-switch v-model="schedule.enabled">enabled</md-switch>
+            
+            <br />
+            <md-button class="md-raised md-primary" @click="saveSchedule()">save</md-button>
+            <md-button class="md-accent" :disabled="!hasID()" @click="deleteSchedule()">delete</md-button>
+            <md-button href="/">cancel</md-button>
+        </div>
+    </div>
+</div>
+
+<script>
+
+Vue.use(VueMaterial.default);
+
+var app = new Vue({
+    el: '#app',
+    delimiters: ['${', '}'],
+    data: {
+        {% if isinstance(id, str) %}
+        id: "{{id}}",
+        {% else %}
+        id: null,
+        {% end %}
+        schedule: {}
+    },
+    mounted: function() {
+        this.getSchedule(this.id);
+    },
+    computed: {
+    },
+    methods: {
+        hasID: function() {
+            return !(this.id === undefined || this.id === null || this.id === '');
+        },
+        getSchedule: function() {
+            if (!this.hasID()) {
+                this.schedule = {enabled: true};
+                return;
+            }
+            self = this;
+            var data = axios.get('/api/schedules/' + this.id).then(function(response) {
+                self.schedule = response.data.schedule || {};
+            });
+        },
+        saveSchedule: function() {
+            var data = this.schedule;
+            if (this.hasID()) {
+                axios.put('/api/schedules/' + this.id, data).then(function(response) {
+                    console.log(response);
+                });
+            } else {
+                axios.post('/api/schedules', data).then(function(response) {
+                    console.log(response);
+                    window.location = '/schedule.html?id=' + response.data.id;
+                });
+            }
+        },
+        deleteSchedule: function() {
+            if (!this.hasID()) {
+                return;
+            }
+            axios.delete('/api/schedules/' + this.id).then(function(response) {
+                window.location = '/';
+            });
+        }
+    }
+});
+
+</script>
+<style>
+
+body {
+    background-color: white;
+}
+
+</style>
 {% end %}
