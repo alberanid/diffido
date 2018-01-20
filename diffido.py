@@ -3,11 +3,15 @@
 
 import os
 import json
+import shutil
+import urllib
 import logging
+import datetime
 import requests
+import subprocess
+import multiprocessing
 
 from tornado.ioloop import IOLoop
-# from lxml.html.diff import htmldiff
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.schedulers.tornado import TornadoScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -19,10 +23,10 @@ from tornado.options import define, options
 import tornado.web
 from tornado import gen, escape
 
-CONF_DIR = ''
 JOBS_STORE = 'sqlite:///conf/jobs.db'
 API_VERSION = '1.0'
 SCHEDULES_FILE = 'conf/schedules.json'
+GIT_CMD = 'git'
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -65,8 +69,21 @@ def run_job(id_=None, *args, **kwargs):
     if not url:
         return
     print('Running job id:%s title:%s url: %s' % (id_, schedule.get('title', ''), url))
-    req = requests.get(url, timeout=(30.10, 240))
-    print(req.text)
+    req = requests.get(url, allow_redirects=True, timeout=(30.10, 240))
+    content = req.text
+    req_path = urllib.parse.urlparse(req.url).path
+    base_name = os.path.basename(req_path) or 'index'
+    def _commit(id_, filename, content):
+        os.chdir('storage/%s' % id_)
+        with open(filename, 'w') as fd:
+            fd.write(content)
+        p = subprocess.Popen([GIT_CMD, 'add', filename])
+        p.communicate()
+        p = subprocess.Popen([GIT_CMD, 'commit', '-m', '%s' % datetime.datetime.utcnow(), '--allow-empty'])
+        p.communicate()
+    p = multiprocessing.Process(target=_commit, args=(id_, base_name, content))
+    p.start()
+    p.join()
 
 
 def scheduler_update(scheduler, id_):
@@ -86,17 +103,34 @@ def scheduler_update(scheduler, id_):
     elif trigger == 'cron':
         cron_trigger = CronTrigger.from_crontab(schedule.get('cron_crontab'))
         args['trigger'] = cron_trigger
+    git_create_repo(id_)
     scheduler.add_job(run_job, id=id_, replace_existing=True, kwargs={'id_': id_}, **args)
 
 
 def scheduler_delete(scheduler, id_):
     scheduler.remove_job(job_id=id_)
+    git_delete_repo(id_)
 
 
 def reset_from_schedules(scheduler):
     scheduler.remove_all_jobs()
     for key in read_schedules().get('schedules', {}).keys():
         scheduler_update(scheduler, id_=key)
+
+
+def git_create_repo(id_):
+    repo_dir = 'storage/%s' % id_
+    if os.path.isdir(repo_dir):
+        return
+    p = subprocess.Popen([GIT_CMD, 'init', repo_dir])
+    p.communicate()
+
+
+def git_delete_repo(id_):
+    repo_dir = 'storage/%s' % id_
+    if not os.path.isdir(repo_dir):
+        return
+    shutil.rmtree(repo_dir)
 
 
 class DiffidoBaseException(Exception):

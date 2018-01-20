@@ -3,6 +3,7 @@ conf/*.db
 .DS_Store
 node_modules/
 __pycache__
+storage/*
 npm-debug*.log
 ssl/*.pem
 *.py[cod]
