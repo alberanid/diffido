@@ -18,9 +18,41 @@ import tornado.web
 from tornado import gen, escape
 
 CONF_DIR = ''
-JOBS_STORE = 'sqlite:///storage/jobs.db'
+JOBS_STORE = 'sqlite:///conf/jobs.db'
 API_VERSION = '1.0'
 SCHEDULES_FILE = 'conf/schedules.json'
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+def read_schedules():
+    if not os.path.isfile(SCHEDULES_FILE):
+        return {'schedules': {}}
+    try:
+        with open(SCHEDULES_FILE, 'r') as fd:
+            return json.loads(fd.read())
+    except Exception as e:
+        logger.error('unable to read %s: %s' % (SCHEDULES_FILE, e))
+        return {'schedules': {}}
+
+
+def write_schedules(schedules):
+    with open(SCHEDULES_FILE, 'w') as fd:
+        fd.write(json.dumps(schedules, indent=2))
+
+
+def next_id(schedules):
+    ids = schedules.get('schedules', {}).keys()
+    if not ids:
+        return '1'
+    return str(max([int(i) for i in ids]) + 1)
+
+
+def get_schedule(id_):
+    schedules = read_schedules()
+    data = schedules.get('schedules', {}).get(id_, {})
+    data['id'] = str(id_)
+    return data
 
 
 class DiffidoBaseException(Exception):
@@ -100,38 +132,12 @@ class BaseHandler(tornado.web.RequestHandler):
 
 
 class SchedulesHandler(BaseHandler):
-    def read_schedules(self):
-        if not os.path.isfile(SCHEDULES_FILE):
-            return {'schedules': {}}
-        try:
-            with open(SCHEDULES_FILE, 'r') as fd:
-                return json.loads(fd.read())
-        except Exception as e:
-            self.logger.error('unable to read %s: %s' % (SCHEDULES_FILE, e))
-            return {'schedules': {}}
-
-    def write_schedules(self, schedules):
-        with open(SCHEDULES_FILE, 'w') as fd:
-            fd.write(json.dumps(schedules, indent=2))
-
-    def next_id(self, schedules):
-        ids = schedules.get('schedules', {}).keys()
-        if not ids:
-            return 1
-        return max([int(i) for i in ids]) + 1
-
-    def _get_schedule(self, id_):
-        schedules = self.read_schedules()
-        data = schedules.get('schedules', {}).get(id_, {})
-        data['id'] = str(id_)
-        return data
-
     @gen.coroutine
     def get(self, id_=None, *args, **kwargs):
         if id_ is not None:
-            self.write({'schedule': self._get_schedule(id_)})
+            self.write({'schedule': get_schedule(id_)})
             return
-        schedules = self.read_schedules()
+        schedules = read_schedules()
         self.write(schedules)
 
     @gen.coroutine
@@ -139,30 +145,30 @@ class SchedulesHandler(BaseHandler):
         if id_ is None:
             return self.build_error(message='update action requires an ID')
         data = self.clean_body
-        schedules = self.read_schedules()
+        schedules = read_schedules()
         if id_ not in schedules.get('schedules', {}):
             return self.build_error(message='schedule %s not found' % id_)
         schedules['schedules'][id_] = data
-        self.write_schedules(schedules)
-        self.write(self._get_schedule(id_=id_))
+        write_schedules(schedules)
+        self.write(get_schedule(id_=id_))
 
     @gen.coroutine
     def post(self, *args, **kwargs):
         data = self.clean_body
-        schedules = self.read_schedules()
-        id_ = str(self.next_id(schedules))
+        schedules = read_schedules()
+        id_ = next_id(schedules)
         schedules['schedules'][id_] = data
-        self.write_schedules(schedules)
-        self.write(self._get_schedule(id_=id_))
+        write_schedules(schedules)
+        self.write(get_schedule(id_=id_))
 
     @gen.coroutine
     def delete(self, id_=None, *args, **kwargs):
         if id_ is None:
             return self.build_error(message='an ID must be specified')
-        schedules = self.read_schedules()
+        schedules = read_schedules()
         if id_ in schedules.get('schedules', {}):
             del schedules['schedules'][id_]
-            self.write_schedules(schedules)
+            write_schedules(schedules)
         self.build_success(message='removed schedule %s' % id_)
 
 
@@ -203,8 +209,6 @@ def serve():
             callback=lambda path: tornado.options.parse_config_file(path, final=False))
     tornado.options.parse_command_line()
 
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
     if options.debug:
         logger.setLevel(logging.DEBUG)
 

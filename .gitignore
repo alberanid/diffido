@@ -1,7 +1,7 @@
 conf/*.json
+conf/*.db
 .DS_Store
 node_modules/
-storage/
 __pycache__
 npm-debug*.log
 ssl/*.pem
