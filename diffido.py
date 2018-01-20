@@ -7,6 +7,7 @@ import logging
 
 from tornado.ioloop import IOLoop
 # from lxml.html.diff import htmldiff
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.schedulers.tornado import TornadoScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
@@ -71,12 +72,16 @@ def scheduler_update(scheduler, id_):
     trigger = schedule.get('trigger')
     if trigger not in ('interval', 'cron'):
         return
-    args = {'trigger': trigger}
+    args = {}
     if trigger == 'interval':
+        args['trigger'] = 'interval'
         for unit in 'weeks', 'days', 'hours', 'minutes', 'seconds':
             if 'interval_%s' % unit not in schedule:
                 continue
             args[unit] = int(schedule['interval_%s' % unit])
+    elif trigger == 'cron':
+        cron_trigger = CronTrigger.from_crontab(schedule.get('cron_crontab'))
+        args['trigger'] = cron_trigger
     scheduler.add_job(run_job, id=id_, replace_existing=True, kwargs={'id_': id_}, **args)
 
 
