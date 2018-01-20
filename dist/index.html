@@ -9,7 +9,7 @@
                     <h1 class="md-title">Schedules <a href="schedule.html">add new</a></h1>
                 </md-table-toolbar>
                 <md-table-row slot="md-table-row" slot-scope="{item}">
-                    <md-table-cell md-label="#" md-sort-by="id" md-numeric>${ item.id }</md-table-cell>
+                    <md-table-cell md-label="#" md-sort-by="id" md-numeric><a :href="settingsUrl(item)">${ item.id }</a></md-table-cell>
                     <md-table-cell md-label="title" md-sort-by="title"><a :href="settingsUrl(item)">${ item.title }</a></md-table-cell>
                     <md-table-cell md-label="url" md-sort-by="email">${ item.url }</md-table-cell>
                 </md-table-row>

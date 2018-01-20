@@ -48,11 +48,46 @@ def next_id(schedules):
     return str(max([int(i) for i in ids]) + 1)
 
 
-def get_schedule(id_):
+def get_schedule(id_, addID=True):
     schedules = read_schedules()
     data = schedules.get('schedules', {}).get(id_, {})
-    data['id'] = str(id_)
+    if addID:
+        data['id'] = str(id_)
     return data
+
+
+def run_job(id_=None, *args, **kwargs):
+    schedule = get_schedule(id_, addID=False)
+    url = schedule.get('url')
+    if not url:
+        return
+    print('Running job id:%s title:%s url: %s' % (id_, schedule.get('title', ''), url))
+
+
+def scheduler_update(scheduler, id_):
+    schedule = get_schedule(id_, addID=False)
+    if not schedule:
+        return
+    trigger = schedule.get('trigger')
+    if trigger not in ('interval', 'cron'):
+        return
+    args = {'trigger': trigger}
+    if trigger == 'interval':
+        for unit in 'weeks', 'days', 'hours', 'minutes', 'seconds':
+            if 'interval_%s' % unit not in schedule:
+                continue
+            args[unit] = int(schedule['interval_%s' % unit])
+    scheduler.add_job(run_job, id=id_, replace_existing=True, kwargs={'id_': id_}, **args)
+
+
+def scheduler_delete(scheduler, id_):
+    scheduler.remove_job(job_id=id_)
+
+
+def reset_from_schedules(scheduler):
+    scheduler.remove_all_jobs()
+    for key in read_schedules().get('schedules', {}).keys():
+        scheduler_update(scheduler, id_=key)
 
 
 class DiffidoBaseException(Exception):
@@ -150,6 +185,7 @@ class SchedulesHandler(BaseHandler):
             return self.build_error(message='schedule %s not found' % id_)
         schedules['schedules'][id_] = data
         write_schedules(schedules)
+        scheduler_update(scheduler=self.scheduler, id_=id_)
         self.write(get_schedule(id_=id_))
 
     @gen.coroutine
@@ -159,6 +195,7 @@ class SchedulesHandler(BaseHandler):
         id_ = next_id(schedules)
         schedules['schedules'][id_] = data
         write_schedules(schedules)
+        scheduler_update(scheduler=self.scheduler, id_=id_)
         self.write(get_schedule(id_=id_))
 
     @gen.coroutine
@@ -169,7 +206,14 @@ class SchedulesHandler(BaseHandler):
         if id_ in schedules.get('schedules', {}):
             del schedules['schedules'][id_]
             write_schedules(schedules)
+        scheduler_delete(scheduler=self.scheduler, id_=id_)
         self.build_success(message='removed schedule %s' % id_)
+
+
+class ResetSchedulesHandler(BaseHandler):
+    @gen.coroutine
+    def post(self, *args, **kwargs):
+        reset_from_schedules(self.scheduler)
 
 
 class TemplateHandler(BaseHandler):
@@ -185,18 +229,10 @@ class TemplateHandler(BaseHandler):
         self.render(page, **arguments)
 
 
-def run_scheduled(id_=None, *args, **kwargs):
-    print('RUNNING %d' % id_)
-
-def run():
-    print('runno!')
-
 def serve():
     jobstores = {'default': SQLAlchemyJobStore(url=JOBS_STORE)}
     scheduler = TornadoScheduler(jobstores=jobstores)
     scheduler.start()
-    #scheduler.remove_job('run')
-    #scheduler.add_job(run, 'interval', minutes=1)
 
     define('port', default=3210, help='run on the given port', type=int)
     define('address', default='', help='bind the server at the given address', type=str)
@@ -219,8 +255,11 @@ def serve():
     init_params = dict(listen_port=options.port, logger=logger, ssl_options=ssl_options,
                        scheduler=scheduler)
 
+    _reset_schedules_path = r'schedules/reset'
     _schedules_path = r'schedules/?(?P<id_>\d+)?'
     application = tornado.web.Application([
+            ('/api/%s' % _reset_schedules_path, ResetSchedulesHandler, init_params),
+            (r'/api/v%s/%s' % (API_VERSION, _reset_schedules_path), ResetSchedulesHandler, init_params),
             ('/api/%s' % _schedules_path, SchedulesHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _schedules_path), SchedulesHandler, init_params),
             (r'/?(.*)', TemplateHandler, init_params),

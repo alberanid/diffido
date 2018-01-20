@@ -12,9 +12,48 @@
                 <label>url</label>
                 <md-input v-model="schedule.url"></md-input>
             </md-field>
+
+            <md-field>
+                <label>trigger</label>
+                <md-select v-model="schedule.trigger">
+                    <md-option value="interval">interval</md-option>
+                    <md-option value="cron">cron</md-option>
+                </md-select>
+            </md-field>
+
+            <div v-if="schedule.trigger == 'interval'">
+                <md-field>
+                    <label>weeks</label>
+                    <md-input v-model="schedule.interval_weeks" type="number"></md-input>
+                </md-field>
+                <md-field>
+                    <label>days</label>
+                    <md-input v-model="schedule.interval_days" type="number"></md-input>
+                </md-field>
+                <md-field>
+                    <label>hours</label>
+                    <md-input v-model="schedule.interval_hours" type="number"></md-input>
+                </md-field>
+                <md-field>
+                    <label>minutes</label>
+                    <md-input v-model="schedule.interval_minutes" type="number"></md-input>
+                </md-field>
+                <md-field>
+                    <label>seconds</label>
+                    <md-input v-model="schedule.interval_seconds" type="number"></md-input>
+                </md-field>
+            </div>
+
+            <div v-if="schedule.trigger == 'cron'">
+                <md-field>
+                    <label>crontab</label>
+                    <md-input v-model="schedule.cron_crontab"></md-input>
+                </md-field>
+            </div>
+
             <md-field>
                 <label>notify email</label>
-                <md-input v-model="schedule.email"></md-input>
+                <md-input v-model="schedule.email" type="email"></md-input>
             </md-field>
             <md-field>
                 <label>XPath selector</label>
@@ -28,8 +67,8 @@
             
             <br />
             <md-button class="md-raised md-primary" @click="saveSchedule()">save</md-button>
-            <md-button class="md-accent" :disabled="!hasID()" @click="deleteSchedule()">delete</md-button>
-            <md-button href="/">cancel</md-button>
+            <md-button class="md-raised md-accent" :disabled="!hasID()" @click="deleteSchedule()">delete</md-button>
+            <md-button href="/">back</md-button>
         </div>
     </div>
 </div>
@@ -47,7 +86,8 @@ var app = new Vue({
         {% else %}
         id: null,
         {% end %}
-        schedule: {}
+        schedule: {},
+        empty_schedule: {enabled: true, trigger: 'interval'}
     },
     mounted: function() {
         this.getSchedule(this.id);
@@ -60,12 +100,12 @@ var app = new Vue({
         },
         getSchedule: function() {
             if (!this.hasID()) {
-                this.schedule = {enabled: true};
+                this.schedule = this.empty_schedule;
                 return;
             }
             self = this;
             var data = axios.get('/api/schedules/' + this.id).then(function(response) {
-                self.schedule = response.data.schedule || {};
+                self.schedule = response.data.schedule || self.empty_schedule;
             });
         },
         saveSchedule: function() {
