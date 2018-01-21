@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div id="app">
+    <div class="md-layout">
+        <div class="md-layout-item" md-card>
+            <md-table id="history-table" v-model="history">
+                <md-table-toolbar>
+                    <h1 class="md-title">History</h1>
+                </md-table-toolbar>
+                <md-table-row slot="md-table-row" slot-scope="{item}">
+                    <md-table-cell md-label="commit ID" md-sort-by="id">${ item.id }</md-table-cell>
+                    <md-table-cell md-label="message" md-sort-by="message">${ item.message }</md-table-cell>
+                </md-table-row>
+            </md-table>
+        </div>
+    </div>
+</div>
+
+<script>
+
+Vue.use(VueMaterial.default);
+
+var app = new Vue({
+    el: '#app',
+    delimiters: ['${', '}'],
+    data: {
+        history: [],
+        {% if isinstance(id, str) %}
+        id: "{{id}}",
+        {% else %}
+        id: null,
+        {% end %}
+    },
+    mounted: function() {
+        this.getHistory();
+    },
+    methods: {
+        getHistory: function() {
+            self = this;
+            var data = axios.get('/api/history/' + this.id).then(function(response) {
+                console.log(response);
+                self.history = response.data.history;
+            });
+        }
+    }
+});
+
+</script>
+<style>
+
+body {
+    background-color: white;
+}
+
+.md-table {
+    width: 60%;
+    min-height: 800px;
+    max-height: 800px;
+}
+
+</style>
+{% end %}

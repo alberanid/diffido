@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import os
+import re
+import io
 import json
 import shutil
 import urllib
@@ -27,6 +29,9 @@ JOBS_STORE = 'sqlite:///conf/jobs.db'
 API_VERSION = '1.0'
 SCHEDULES_FILE = 'conf/schedules.json'
 GIT_CMD = 'git'
+
+re_insertion = re.compile(r'(\d+) insertion')
+re_deletion = re.compile(r'(\d+) deletion')
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -68,7 +73,7 @@ def run_job(id_=None, *args, **kwargs):
     url = schedule.get('url')
     if not url:
         return
-    print('Running job id:%s title:%s url: %s' % (id_, schedule.get('title', ''), url))
+    logger.debug('Running job id:%s title:%s url: %s' % (id_, schedule.get('title', ''), url))
     req = requests.get(url, allow_redirects=True, timeout=(30.10, 240))
     content = req.text
     req_path = urllib.parse.urlparse(req.url).path
@@ -85,6 +90,41 @@ def run_job(id_=None, *args, **kwargs):
     p.start()
     p.join()
 
+
+def get_history(id_):
+    def _history(id_, queue):
+        os.chdir('storage/%s' % id_)
+        p = subprocess.Popen([GIT_CMD, 'log', '--pretty=oneline', '--shortstat'], stdout=subprocess.PIPE)
+        stdout, _ = p.communicate()
+        queue.put(stdout)
+    queue = multiprocessing.Queue()
+    p = multiprocessing.Process(target=_history, args=(id_, queue))
+    p.start()
+    res = queue.get().decode('utf-8')
+    p.join()
+    history = []
+    res_io = io.StringIO(res)
+    while True:
+        commit_line = res_io.readline().strip()
+        if not commit_line:
+            break
+        commit_id, message = commit_line.split(' ', 1)
+        if len(commit_id) != 40:
+            continue
+        changes_line = res_io.readline().strip()
+        insert = re_insertion.findall(changes_line)
+        if insert:
+            insert = int(insert[0])
+        else:
+            insert = 0
+        delete = re_deletion.findall(changes_line)
+        if delete:
+            delete = int(delete[0])
+        else:
+            delete = 0
+        history.append({'id': commit_id, 'message': message, 'insertions': insert, 'deletions': delete,
+                        'changes': max(insert, delete)})
+    return history
 
 def scheduler_update(scheduler, id_):
     schedule = get_schedule(id_, addID=False)
@@ -259,6 +299,12 @@ class ResetSchedulesHandler(BaseHandler):
         reset_from_schedules(self.scheduler)
 
 
+class HistoryHandler(BaseHandler):
+    @gen.coroutine
+    def get(self, id_, *args, **kwargs):
+        self.write({'history': get_history(id_)})
+
+
 class TemplateHandler(BaseHandler):
     """Handler for the / path."""
     app_path = os.path.join(os.path.dirname(__file__), "dist")
@@ -300,11 +346,14 @@ def serve():
 
     _reset_schedules_path = r'schedules/reset'
     _schedules_path = r'schedules/?(?P<id_>\d+)?'
+    _history_path = r'history/?(?P<id_>\d+)'
     application = tornado.web.Application([
             ('/api/%s' % _reset_schedules_path, ResetSchedulesHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _reset_schedules_path), ResetSchedulesHandler, init_params),
             ('/api/%s' % _schedules_path, SchedulesHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _schedules_path), SchedulesHandler, init_params),
+            ('/api/%s' % _history_path, HistoryHandler, init_params),
+            (r'/api/v%s/%s' % (API_VERSION, _history_path), HistoryHandler, init_params),
             (r'/?(.*)', TemplateHandler, init_params),
         ],
         static_path=os.path.join(os.path.dirname(__file__), 'dist/static'),

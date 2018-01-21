@@ -9,9 +9,10 @@
                     <h1 class="md-title">Schedules <a href="schedule.html">add new</a></h1>
                 </md-table-toolbar>
                 <md-table-row slot="md-table-row" slot-scope="{item}">
-                    <md-table-cell md-label="#" md-sort-by="id" md-numeric><a :href="settingsUrl(item)">${ item.id }</a></md-table-cell>
-                    <md-table-cell md-label="title" md-sort-by="title"><a :href="settingsUrl(item)">${ item.title }</a></md-table-cell>
-                    <md-table-cell md-label="url" md-sort-by="email">${ item.url }</md-table-cell>
+                    <md-table-cell md-label="#" md-sort-by="id" md-numeric><a :href="'/schedule.html?id=' + item.id">${ item.id }</a></md-table-cell>
+                    <md-table-cell md-label="title" md-sort-by="title"><a :href="'/schedule.html?id=' + item.id">${ item.title }</a></md-table-cell>
+                    <md-table-cell md-label="url" md-sort-by="email"><a :href="item.url" target="_new">${ item.url }</a></md-table-cell>
+                    <md-table-cell md-label="history" md-sort-by="email"><a :href="'/history.html?id=' + item.id">history</a></md-table-cell>
                 </md-table-row>
             </md-table>
         </div>
@@ -34,12 +35,6 @@ var app = new Vue({
     computed: {
     },
     methods: {
-        settingsUrl: function(item) {
-            if (!(item && item.id !== undefined)) {
-                return '';
-            }
-            return '/schedule.html?id=' + item.id;
-        },
         getSchedules: function() {
             self = this;
             var data = axios.get('/api/schedules').then(function(response) {
