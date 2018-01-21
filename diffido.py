@@ -124,7 +124,27 @@ def get_history(id_):
             delete = 0
         history.append({'id': commit_id, 'message': message, 'insertions': insert, 'deletions': delete,
                         'changes': max(insert, delete)})
-    return history
+    lastid = None
+    if history and 'id' in history[0]:
+        lastid = history[0]['id']
+    for idx, item in enumerate(history):
+        item['seq'] = idx + 1
+    return {'history': history, 'lastid': lastid}
+
+
+def get_diff(id_, diff, oldid=None):
+    def _history(id_, diff, oldid, queue):
+        os.chdir('storage/%s' % id_)
+        p = subprocess.Popen([GIT_CMD, 'diff', diff, oldid or '%s~' % diff], stdout=subprocess.PIPE)
+        stdout, _ = p.communicate()
+        queue.put(stdout)
+    queue = multiprocessing.Queue()
+    p = multiprocessing.Process(target=_history, args=(id_, diff, oldid, queue))
+    p.start()
+    res = queue.get().decode('utf-8')
+    p.join()
+    return {'diff': res}
+
 
 def scheduler_update(scheduler, id_):
     schedule = get_schedule(id_, addID=False)
@@ -302,7 +322,13 @@ class ResetSchedulesHandler(BaseHandler):
 class HistoryHandler(BaseHandler):
     @gen.coroutine
     def get(self, id_, *args, **kwargs):
-        self.write({'history': get_history(id_)})
+        self.write(get_history(id_))
+
+
+class DiffHandler(BaseHandler):
+    @gen.coroutine
+    def get(self, id_, diff, oldid=None, *args, **kwargs):
+        self.write(get_diff(id_, diff, oldid))
 
 
 class TemplateHandler(BaseHandler):
@@ -347,13 +373,17 @@ def serve():
     _reset_schedules_path = r'schedules/reset'
     _schedules_path = r'schedules/?(?P<id_>\d+)?'
     _history_path = r'history/?(?P<id_>\d+)'
+    _diff_path = r'diff/(?P<id_>\d+)/(?P<diff>\s+)/?(?P<oldid>\s+)?'
+    _diff_path = r'diff/(?P<id_>\d+)/(?P<diff>[0-9a-f]+)/?(?P<oldid>[0-9a-f]+)?/?'
     application = tornado.web.Application([
-            ('/api/%s' % _reset_schedules_path, ResetSchedulesHandler, init_params),
+            (r'/api/%s' % _reset_schedules_path, ResetSchedulesHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _reset_schedules_path), ResetSchedulesHandler, init_params),
-            ('/api/%s' % _schedules_path, SchedulesHandler, init_params),
+            (r'/api/%s' % _schedules_path, SchedulesHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _schedules_path), SchedulesHandler, init_params),
-            ('/api/%s' % _history_path, HistoryHandler, init_params),
+            (r'/api/%s' % _history_path, HistoryHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _history_path), HistoryHandler, init_params),
+            (r'/api/%s' % _diff_path, DiffHandler, init_params),
+            (r'/api/v%s/%s' % (API_VERSION, _diff_path), DiffHandler, init_params),
             (r'/?(.*)', TemplateHandler, init_params),
         ],
         static_path=os.path.join(os.path.dirname(__file__), 'dist/static'),

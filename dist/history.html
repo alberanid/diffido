@@ -9,6 +9,11 @@
                     <h1 class="md-title">History</h1>
                 </md-table-toolbar>
                 <md-table-row slot="md-table-row" slot-scope="{item}">
+                    <md-table-cell>
+                        (<a :href="'/diff.html?id=' + id + '&oldid=' + item.id + '&diff=' + lastid">cur</a> | <a :href="'/diff.html?id=' + id + '&diff=' + item.id">prev</a>)
+                        <md-radio name="oldid" v-model="oldid" :value="item.id" v-if="item.seq > 1" :seq="item.seq"></md-radio><span id="placeholder" v-if="item.seq == 1"> ---- </span>
+                        <md-radio name="diff" v-model="diff" :value="item.id" :seq="item.seq"></md-radio>
+                    </md-table-cell>
                     <md-table-cell md-label="commit ID" md-sort-by="id">${ item.id }</md-table-cell>
                     <md-table-cell md-label="message" md-sort-by="message">${ item.message }</md-table-cell>
                 </md-table-row>
@@ -26,6 +31,9 @@ var app = new Vue({
     delimiters: ['${', '}'],
     data: {
         history: [],
+        oldid: null,
+        diff: null,
+        lasstid: null,
         {% if isinstance(id, str) %}
         id: "{{id}}",
         {% else %}
@@ -41,6 +49,7 @@ var app = new Vue({
             var data = axios.get('/api/history/' + this.id).then(function(response) {
                 console.log(response);
                 self.history = response.data.history;
+                self.lastid = response.data.lastid;
             });
         }
     }

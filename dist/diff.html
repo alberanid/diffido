@@ -1,5 +1,68 @@
 {% extends "base.html" %}
 
 {% block body %}
-diff page {{ id }}
+<div id="app">
+    <div class="md-layout">
+        <div class="md-layout-item" md-card>
+            <div id="diffpanel"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+
+Vue.use(VueMaterial.default);
+
+var app = new Vue({
+    el: '#app',
+    delimiters: ['${', '}'],
+    data: {
+        history: [],
+        difftext: '',
+        id: "{{id}}",
+        {% try %}
+          {% if diff %}
+        diff: "{{diff}}",
+          {% end %}
+        {% except %}
+        diff: null,
+        {% end %}
+        {% try %}
+          {% if oldid %}
+        oldid: "{{oldid}}",
+          {% end %}
+        {% except %}
+        oldid: null,
+        {% end %}
+    },
+    mounted: function() {
+        this.getDiff();
+    },
+    methods: {
+        getDiff: function() {
+            self = this;
+            var data = axios.get('/api/diff/' + this.id + '/' + this.diff + '/' + (this.oldid || '')).then(function(response) {
+                console.log(response);
+                self.difftext = response.data.diff;
+                var pretty_diff = Diff2Html.getPrettyHtml(self.difftext);
+                document.getElementById('diffpanel').innerHTML = pretty_diff;
+            });
+        }
+    }
+});
+
+</script>
+<style>
+
+body {
+    background-color: white;
+}
+
+.md-table {
+    width: 60%;
+    min-height: 800px;
+    max-height: 800px;
+}
+
+</style>
 {% end %}
