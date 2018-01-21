@@ -14,6 +14,8 @@ import datetime
 import requests
 import subprocess
 import multiprocessing
+from lxml import etree
+from xml.etree import ElementTree
 
 from tornado.ioloop import IOLoop
 from apscheduler.triggers.cron import CronTrigger
@@ -70,6 +72,20 @@ def get_schedule(id_, addID=True):
     return data
 
 
+def select_xpath(content, xpath):
+    fd = io.StringIO(content)
+    tree = etree.parse(fd)
+    elems = tree.xpath(xpath)
+    if not elems:
+        return content
+    selected_content = []
+    for elem in elems:
+        selected_content.append(''.join([elem.text] + [ElementTree.tostring(e).decode('utf8', 'replace')
+                                                    for e in elem.getchildren()]))
+    content = ''.join(selected_content)
+    return content
+
+
 def run_job(id_=None, *args, **kwargs):
     schedule = get_schedule(id_, addID=False)
     url = schedule.get('url')
@@ -78,8 +94,11 @@ def run_job(id_=None, *args, **kwargs):
     logger.debug('Running job id:%s title:%s url: %s' % (id_, schedule.get('title', ''), url))
     req = requests.get(url, allow_redirects=True, timeout=(30.10, 240))
     content = req.text
+    xpath = schedule.get('xpath')
+    if xpath:
+        content = select_xpath(content, xpath)
     req_path = urllib.parse.urlparse(req.url).path
-    base_name = os.path.basename(req_path) or 'index'
+    base_name = os.path.basename(req_path) or 'index.html'
     def _commit(id_, filename, content, queue):
         os.chdir('storage/%s' % id_)
         current_lines = 0
