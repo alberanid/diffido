@@ -7,6 +7,8 @@ import io
 import json
 import shutil
 import urllib
+import smtplib
+from email.mime.text import MIMEText
 import logging
 import datetime
 import requests
@@ -78,17 +80,60 @@ def run_job(id_=None, *args, **kwargs):
     content = req.text
     req_path = urllib.parse.urlparse(req.url).path
     base_name = os.path.basename(req_path) or 'index'
-    def _commit(id_, filename, content):
+    def _commit(id_, filename, content, queue):
         os.chdir('storage/%s' % id_)
+        current_lines = 0
+        if os.path.isfile(filename):
+            with open(filename, 'r') as fd:
+                for line in fd:
+                    current_lines += 1
         with open(filename, 'w') as fd:
             fd.write(content)
         p = subprocess.Popen([GIT_CMD, 'add', filename])
         p.communicate()
-        p = subprocess.Popen([GIT_CMD, 'commit', '-m', '%s' % datetime.datetime.utcnow(), '--allow-empty'])
-        p.communicate()
-    p = multiprocessing.Process(target=_commit, args=(id_, base_name, content))
+        p = subprocess.Popen([GIT_CMD, 'commit', '-m', '%s' % datetime.datetime.utcnow(), '--allow-empty'],
+                             stdout=subprocess.PIPE)
+        stdout, _ = p.communicate()
+        stdout = stdout.decode('utf-8')
+        insert = re_insertion.findall(stdout)
+        if insert:
+            insert = int(insert[0])
+        else:
+            insert = 0
+        delete = re_deletion.findall(stdout)
+        if delete:
+            delete = int(delete[0])
+        else:
+            delete = 0
+        queue.put({'insertions': insert, 'deletions': delete, 'previous_lines': current_lines,
+                   'changes': max(insert, delete)})
+    queue = multiprocessing.Queue()
+    p = multiprocessing.Process(target=_commit, args=(id_, base_name, content, queue))
     p.start()
+    res = queue.get()
     p.join()
+    email = schedule.get('email')
+    if not email:
+        return
+    changes = res.get('changes')
+    if not changes:
+        return
+    min_change = schedule.get('minimum_change')
+    previous_lines = res.get('previous_lines')
+    if min_change and previous_lines:
+        min_change = float(min_change)
+        change_fraction = res.get('changes') / previous_lines
+        if change_fraction < min_change:
+            return
+    # send notification
+    diff = get_diff(id_)
+    msg = MIMEText('changes:\n\n%s' % diff.get('diff'))
+    msg['Subject'] = '%s page changed' % schedule.get('title')
+    msg['From'] = 'Diffido <da@mimante.net>'
+    msg['To'] = email
+    s = smtplib.SMTP('localhost')
+    s.send_message(msg)
+    s.quit()
 
 
 def get_history(id_):
@@ -132,7 +177,7 @@ def get_history(id_):
     return {'history': history, 'lastid': lastid}
 
 
-def get_diff(id_, diff, oldid=None):
+def get_diff(id_, diff='HEAD', oldid=None):
     def _history(id_, diff, oldid, queue):
         os.chdir('storage/%s' % id_)
         p = subprocess.Popen([GIT_CMD, 'diff', diff, oldid or '%s~' % diff], stdout=subprocess.PIPE)
