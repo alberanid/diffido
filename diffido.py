@@ -32,6 +32,7 @@ from tornado import gen, escape
 JOBS_STORE = 'sqlite:///conf/jobs.db'
 API_VERSION = '1.0'
 SCHEDULES_FILE = 'conf/schedules.json'
+DEFAULT_CONF = 'conf/diffido.conf'
 GIT_CMD = 'git'
 
 re_insertion = re.compile(r'(\d+) insertion')
@@ -419,9 +420,13 @@ def serve():
             help='specify the SSL certificate to use for secure connections')
     define('ssl_key', default=os.path.join(os.path.dirname(__file__), 'ssl', 'diffido_key.pem'),
             help='specify the SSL private key to use for secure connections')
+    define('admin-email', default='', help='email address of the site administrator', type=str)
     define('debug', default=False, help='run in debug mode')
     define('config', help='read configuration file',
             callback=lambda path: tornado.options.parse_config_file(path, final=False))
+    if not options.config and os.path.isfile(DEFAULT_CONF):
+        tornado.options.parse_config_file(DEFAULT_CONF, final=False)
+        print(options.admin_email)
     tornado.options.parse_command_line()
 
     if options.debug:
