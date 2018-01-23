@@ -147,7 +147,7 @@ def run_job(id_=None, *args, **kwargs):
         if change_fraction < min_change:
             return
     # send notification
-    diff = get_diff(id_, {}).get('diff')
+    diff = get_diff(id_).get('diff')
     if not diff:
         return
     send_email(to=email, subject='%s page changed' % schedule.get('title'),
