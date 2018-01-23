@@ -7,6 +7,9 @@
             <md-card id="main-card">
                 <md-card-header>
                     <div class="md-title">
+                        <md-button href="/" class="md-icon-button md-primary">
+                            <md-icon>home</md-icon>
+                        </md-button>
                         Diffido
                         <md-button href="/schedule.html" class="md-icon-button md-primary">
                             <md-icon>add_circle_outline</md-icon>
@@ -20,7 +23,11 @@
                             <md-table-cell md-label="#" md-sort-by="id" md-numeric><a :href="'/schedule.html?id=' + item.id">${ item.id }</a></md-table-cell>
                             <md-table-cell md-label="title" md-sort-by="title"><a :href="'/schedule.html?id=' + item.id">${ item.title }</a></md-table-cell>
                             <md-table-cell md-label="url" md-sort-by="email"><a :href="item.url" target="_new">${ item.url }</a></md-table-cell>
-                            <md-table-cell md-label="history" md-sort-by="email"><a :href="'/history.html?id=' + item.id">history</a></md-table-cell>
+                            <md-table-cell md-label="history" md-sort-by="email">
+                                <md-button :href="'/history.html?id=' + item.id" class="md-icon-button md-primary">
+                                    <md-icon>history</md-icon>
+                                </md-button>
+                            </md-table-cell>
                         </md-table-row>
                     </md-table>
                 </md-card-content>

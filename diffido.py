@@ -209,11 +209,11 @@ def get_history(id_):
         lastid = history[0]['id']
     for idx, item in enumerate(history):
         item['seq'] = idx + 1
-    return {'history': history, 'lastid': lastid}
+    schedule = get_schedule(id_)
+    return {'history': history, 'lastid': lastid, 'schedule': schedule}
 
 
 def get_diff(id_, commit_id='HEAD', old_commit_id=None):
-    logger.warn('MEHHHH %s  %s  %s' % (id_, commit_id, old_commit_id))
     def _history(id_, commit_id, old_commit_id, queue):
         os.chdir('storage/%s' % id_)
         p = subprocess.Popen([GIT_CMD, 'diff', old_commit_id or '%s~' % commit_id, commit_id],
@@ -225,7 +225,8 @@ def get_diff(id_, commit_id='HEAD', old_commit_id=None):
     p.start()
     res = queue.get().decode('utf-8')
     p.join()
-    return {'diff': res}
+    schedule = get_schedule(id_)
+    return {'diff': res, 'schedule': schedule}
 
 
 def scheduler_update(scheduler, id_):

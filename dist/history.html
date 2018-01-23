@@ -4,21 +4,34 @@
 <div id="app">
     <div class="md-layout">
         <div class="md-layout-item" md-card>
-            <md-table id="history-table" v-model="history">
-                <md-table-toolbar>
-                    <h1 class="md-title">History</h1>
-                </md-table-toolbar>
-                <md-table-row slot="md-table-row" slot-scope="{item}">
-                    <md-table-cell>
-                        (<a v-if="item.seq > 1" :href="'/diff.html?id=' + id + '&oldid=' + item.id + '&diff=' + lastid">cur</a><span v-if="item.seq == 1">cur</span> | <a :href="'/diff.html?id=' + id + '&diff=' + item.id">prev</a>)
-                        <md-radio name="oldid" v-model="oldid" :value="item.id" v-if="item.seq > 1" :seq="item.seq"></md-radio><span id="placeholder" v-if="item.seq == 1"> ---- </span>
-                        <md-radio name="diff" v-model="diff" :value="item.id" :seq="item.seq"></md-radio>
-                    </md-table-cell>
-                    <md-table-cell md-label="commit ID" md-sort-by="id">${ item.id }</md-table-cell>
-                    <md-table-cell md-label="message" md-sort-by="message">${ item.message }</md-table-cell>
-                    <md-table-cell md-label="changes" md-sort-by="message">+${ item.insertions || 0 },-${ item.deletions || 0 }</md-table-cell>
-                </md-table-row>
-            </md-table>
+            <md-card id="main-card">
+                <md-card-header>
+                    <div class="md-title">
+                        <md-button href="/" class="md-icon-button md-primary">
+                            <md-icon>home</md-icon>
+                        </md-button>
+                        Diffido - ${schedule && schedule.title} history
+                    </div>
+                </md-card-header>
+                
+                <md-card-content>
+                    <md-table id="history-table" v-model="history">
+                        <md-table-toolbar>
+                            <h1 class="md-title">History</h1>
+                        </md-table-toolbar>
+                        <md-table-row slot="md-table-row" slot-scope="{item}">
+                            <md-table-cell>
+                                (<a v-if="item.seq > 1" :href="'/diff.html?id=' + id + '&oldid=' + item.id + '&diff=' + lastid">cur</a><span v-if="item.seq == 1">cur</span> | <a :href="'/diff.html?id=' + id + '&diff=' + item.id">prev</a>)
+                                <md-radio name="oldid" v-model="oldid" :value="item.id" v-if="item.seq > 1" :seq="item.seq"></md-radio><span id="placeholder" v-if="item.seq == 1"> ---- </span>
+                                <md-radio name="diff" v-model="diff" :value="item.id" :seq="item.seq"></md-radio>
+                            </md-table-cell>
+                            <md-table-cell md-label="commit ID" md-sort-by="id">${ item.id }</md-table-cell>
+                            <md-table-cell md-label="message" md-sort-by="message">${ item.message }</md-table-cell>
+                            <md-table-cell md-label="changes" md-sort-by="message">+${ item.insertions || 0 },-${ item.deletions || 0 }</md-table-cell>
+                        </md-table-row>
+                    </md-table>
+                </md-card-content>
+            </md-card>
         </div>
     </div>
 </div>
@@ -31,6 +44,7 @@ var app = new Vue({
     el: '#app',
     delimiters: ['${', '}'],
     data: {
+        schedule: {},
         history: [],
         oldid: null,
         diff: null,
@@ -48,8 +62,8 @@ var app = new Vue({
         getHistory: function() {
             self = this;
             var data = axios.get('/api/history/' + this.id).then(function(response) {
-                console.log(response);
                 self.history = response.data.history;
+                self.schedule = response.data.schedule;
                 self.lastid = response.data.lastid;
             });
         }
@@ -61,12 +75,11 @@ var app = new Vue({
 
 body {
     background-color: white;
+    padding: 6px;
 }
 
 .md-table {
-    width: 60%;
-    min-height: 800px;
-    max-height: 800px;
+    height: 80%;
 }
 
 </style>

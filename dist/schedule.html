@@ -10,23 +10,22 @@
                         <md-button href="/" class="md-icon-button md-primary">
                             <md-icon>home</md-icon>
                         </md-button>
-                        Schedule ${schedule && schedule.title}
+                        Diffido: ${(schedule && schedule.title) || 'new'} schedule
                     </div>
                 </md-card-header>
 
                 <md-card-content>
-
                     <div class="md-layout md-gutter">
                         <div class="md-layout-item">
                             <md-field>
                                 <label>title</label>
-                                <md-input v-model="schedule.title"></md-input>
+                                <md-input v-model="schedule.title" required></md-input>
                             </md-field>
                         </div>
                         <div class="md-layout-item">
                             <md-field>
                                 <label>url</label>
-                                <md-input v-model="schedule.url"></md-input>
+                                <md-input v-model="schedule.url" required></md-input>
                             </md-field>
                         </div>
                     </div>

@@ -3,8 +3,21 @@
 {% block body %}
 <div id="app">
     <div class="md-layout">
-        <div class="md-layout-item" md-card>
-            <div id="diffpanel"></div>
+        <div class="md-layout-item">
+            <md-card id="main-card">
+                <md-card-header>
+                    <div class="md-title">
+                        <md-button href="/" class="md-icon-button md-primary">
+                            <md-icon>home</md-icon>
+                        </md-button>
+                        Diffido: ${schedule && schedule.title} diff
+                    </div>
+                </md-card-header>
+
+                <md-card-content id="diffpanel-container">
+                    <div id="diffpanel"></div>
+                </md-card-content>
+            </md-card>
         </div>
     </div>
 </div>
@@ -17,6 +30,7 @@ var app = new Vue({
     el: '#app',
     delimiters: ['${', '}'],
     data: {
+        schedule: {},
         history: [],
         difftext: '',
         id: "{{id}}",
@@ -42,9 +56,12 @@ var app = new Vue({
         getDiff: function() {
             self = this;
             var data = axios.get('/api/diff/' + this.id + '/' + this.diff + '/' + (this.oldid || '')).then(function(response) {
+                self.schedule = response.data.schedule;
                 self.difftext = response.data.diff;
-                var pretty_diff = Diff2Html.getPrettyHtml(self.difftext);
+                var current_size = document.getElementById('diffpanel').offsetWidth;
+                var pretty_diff = Diff2Html.getPrettyHtml(self.difftext, {showFiles: true, matching: 'none'});
                 document.getElementById('diffpanel').innerHTML = pretty_diff;
+                document.getElementById('diffpanel').style['max-width'] = (current_size - 20) + 'px';
             });
         }
     }
@@ -55,12 +72,11 @@ var app = new Vue({
 
 body {
     background-color: white;
+    padding: 6px;
 }
 
 .md-table {
-    width: 60%;
-    min-height: 800px;
-    max-height: 800px;
+    height: 80%;
 }
 
 </style>
