@@ -71,13 +71,12 @@ var app = new Vue({
             });
         },
         updateFilter: function() {
+            if (this.show_empty) {
+                this.filtered_history = this.history;
+                return;
+            }
             self = this;
-            this.filtered_history = _.filter(self.history, function(o) {
-                if (self.show_empty) {
-                    return true;
-                }
-                return o.changes;
-            });
+            this.filtered_history = _.filter(self.history, 'changes');
         },
         toggleShowEmpty: function() {
             this.updateFilter();
