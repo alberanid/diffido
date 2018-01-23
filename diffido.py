@@ -65,10 +65,10 @@ def next_id(schedules):
     return str(max([int(i) for i in ids]) + 1)
 
 
-def get_schedule(id_, addID=True):
+def get_schedule(id_, add_id=True):
     schedules = read_schedules()
     data = schedules.get('schedules', {}).get(id_, {})
-    if addID:
+    if add_id:
         data['id'] = str(id_)
     return data
 
@@ -81,14 +81,14 @@ def select_xpath(content, xpath):
         return content
     selected_content = []
     for elem in elems:
-        selected_content.append(''.join([elem.text] + [ElementTree.tostring(e).decode('utf8', 'replace')
+        selected_content.append(''.join([elem.text] + [ElementTree.tostring(e).decode('utf-8', 'replace')
                                                     for e in elem.getchildren()]))
     content = ''.join(selected_content)
     return content
 
 
 def run_job(id_=None, *args, **kwargs):
-    schedule = get_schedule(id_, addID=False)
+    schedule = get_schedule(id_, add_id=False)
     url = schedule.get('url')
     if not url:
         return
@@ -147,10 +147,22 @@ def run_job(id_=None, *args, **kwargs):
             return
     # send notification
     diff = get_diff(id_)
-    msg = MIMEText('changes:\n\n%s' % diff.get('diff'))
-    msg['Subject'] = '%s page changed' % schedule.get('title')
-    msg['From'] = 'Diffido <da@mimante.net>'
-    msg['To'] = email
+    send_email(to=email, subject='%s page changed' % schedule.get('title'),
+               body='changes:\n\n%s' % diff.get('diff'))
+
+
+def safe_run_job(id_=None, *args, **kwargs):
+    try:
+        run_job(id_, *args, **kwargs)
+    except Exception as e:
+        send_email('error executing job %s: %s' % (id_, e))
+
+
+def send_email(to, subject='diffido', body='', from_=None):
+    msg = MIMEText(body)
+    msg['Subject'] = subject
+    msg['From'] = from_ or 'Diffido <da@mimante.net>'
+    msg['To'] = to
     s = smtplib.SMTP('localhost')
     s.send_message(msg)
     s.quit()
@@ -197,14 +209,15 @@ def get_history(id_):
     return {'history': history, 'lastid': lastid}
 
 
-def get_diff(id_, diff='HEAD', oldid=None):
-    def _history(id_, diff, oldid, queue):
+def get_diff(id_, commit_id='HEAD', old_commit_id=None):
+    def _history(id_, commit_id, old_commit_id, queue):
         os.chdir('storage/%s' % id_)
-        p = subprocess.Popen([GIT_CMD, 'diff', diff, oldid or '%s~' % diff], stdout=subprocess.PIPE)
+        p = subprocess.Popen([GIT_CMD, 'commit_id', old_commit_id or '%s~' % commit_id, commit_id],
+                             stdout=subprocess.PIPE)
         stdout, _ = p.communicate()
         queue.put(stdout)
     queue = multiprocessing.Queue()
-    p = multiprocessing.Process(target=_history, args=(id_, diff, oldid, queue))
+    p = multiprocessing.Process(target=_history, args=(id_, commit_id, old_commit_id, queue))
     p.start()
     res = queue.get().decode('utf-8')
     p.join()
@@ -212,7 +225,7 @@ def get_diff(id_, diff='HEAD', oldid=None):
 
 
 def scheduler_update(scheduler, id_):
-    schedule = get_schedule(id_, addID=False)
+    schedule = get_schedule(id_, add_id=False)
     if not schedule:
         return
     trigger = schedule.get('trigger')
@@ -229,7 +242,7 @@ def scheduler_update(scheduler, id_):
         cron_trigger = CronTrigger.from_crontab(schedule.get('cron_crontab'))
         args['trigger'] = cron_trigger
     git_create_repo(id_)
-    scheduler.add_job(run_job, id=id_, replace_existing=True, kwargs={'id_': id_}, **args)
+    scheduler.add_job(safe_run_job, id=id_, replace_existing=True, kwargs={'id_': id_}, **args)
 
 
 def scheduler_delete(scheduler, id_):
@@ -392,8 +405,8 @@ class HistoryHandler(BaseHandler):
 
 class DiffHandler(BaseHandler):
     @gen.coroutine
-    def get(self, id_, diff, oldid=None, *args, **kwargs):
-        self.write(get_diff(id_, diff, oldid))
+    def get(self, id_, commit_id, old_commit_id=None, *args, **kwargs):
+        self.write(get_diff(id_, commit_id, old_commit_id))
 
 
 class TemplateHandler(BaseHandler):
@@ -442,8 +455,7 @@ def serve():
     _reset_schedules_path = r'schedules/reset'
     _schedules_path = r'schedules/?(?P<id_>\d+)?'
     _history_path = r'history/?(?P<id_>\d+)'
-    _diff_path = r'diff/(?P<id_>\d+)/(?P<diff>\s+)/?(?P<oldid>\s+)?'
-    _diff_path = r'diff/(?P<id_>\d+)/(?P<diff>[0-9a-f]+)/?(?P<oldid>[0-9a-f]+)?/?'
+    _diff_path = r'diff/(?P<id_>\d+)/(?P<commit_id>[0-9a-f]+)/?(?P<old_commit_id>[0-9a-f]+)?/?'
     application = tornado.web.Application([
             (r'/api/%s' % _reset_schedules_path, ResetSchedulesHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _reset_schedules_path), ResetSchedulesHandler, init_params),
