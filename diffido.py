@@ -33,6 +33,7 @@ JOBS_STORE = 'sqlite:///conf/jobs.db'
 API_VERSION = '1.0'
 SCHEDULES_FILE = 'conf/schedules.json'
 DEFAULT_CONF = 'conf/diffido.conf'
+EMAIL_FROM = 'diffido@localhost'
 GIT_CMD = 'git'
 
 re_insertion = re.compile(r'(\d+) insertion')
@@ -161,7 +162,7 @@ def safe_run_job(id_=None, *args, **kwargs):
 def send_email(to, subject='diffido', body='', from_=None):
     msg = MIMEText(body)
     msg['Subject'] = subject
-    msg['From'] = from_ or 'Diffido <da@mimante.net>'
+    msg['From'] = from_ or EMAIL_FROM
     msg['To'] = to
     s = smtplib.SMTP('localhost')
     s.send_message(msg)
@@ -423,6 +424,7 @@ class TemplateHandler(BaseHandler):
 
 
 def serve():
+    global EMAIL_FROM
     jobstores = {'default': SQLAlchemyJobStore(url=JOBS_STORE)}
     scheduler = TornadoScheduler(jobstores=jobstores)
     scheduler.start()
@@ -439,8 +441,9 @@ def serve():
             callback=lambda path: tornado.options.parse_config_file(path, final=False))
     if not options.config and os.path.isfile(DEFAULT_CONF):
         tornado.options.parse_config_file(DEFAULT_CONF, final=False)
-        print(options.admin_email)
     tornado.options.parse_command_line()
+    if options.admin_email:
+        EMAIL_FROM = options.admin_email
 
     if options.debug:
         logger.setLevel(logging.DEBUG)
