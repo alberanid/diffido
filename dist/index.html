@@ -3,18 +3,28 @@
 {% block body %}
 <div id="app">
     <div class="md-layout">
-        <div class="md-layout-item" md-card>
-            <md-table id="schedules-table" v-model="schedules">
-                <md-table-toolbar>
-                    <h1 class="md-title">Schedules <a href="schedule.html">add new</a></h1>
-                </md-table-toolbar>
-                <md-table-row slot="md-table-row" slot-scope="{item}">
-                    <md-table-cell md-label="#" md-sort-by="id" md-numeric><a :href="'/schedule.html?id=' + item.id">${ item.id }</a></md-table-cell>
-                    <md-table-cell md-label="title" md-sort-by="title"><a :href="'/schedule.html?id=' + item.id">${ item.title }</a></md-table-cell>
-                    <md-table-cell md-label="url" md-sort-by="email"><a :href="item.url" target="_new">${ item.url }</a></md-table-cell>
-                    <md-table-cell md-label="history" md-sort-by="email"><a :href="'/history.html?id=' + item.id">history</a></md-table-cell>
-                </md-table-row>
-            </md-table>
+        <div class="md-layout-item">
+            <md-card id="main-card">
+                <md-card-header>
+                    <div class="md-title">
+                        Card without hover effect
+                        <md-button href="/schedule.html" class="md-icon-button md-primary">
+                            <md-icon>add_circle_outline</md-icon>
+                        </md-button>
+                    </div>
+                </md-card-header>
+                
+                <md-card-content>
+                    <md-table id="schedules-table" v-model="schedules">
+                        <md-table-row slot="md-table-row" slot-scope="{item}">
+                            <md-table-cell md-label="#" md-sort-by="id" md-numeric><a :href="'/schedule.html?id=' + item.id">${ item.id }</a></md-table-cell>
+                            <md-table-cell md-label="title" md-sort-by="title"><a :href="'/schedule.html?id=' + item.id">${ item.title }</a></md-table-cell>
+                            <md-table-cell md-label="url" md-sort-by="email"><a :href="item.url" target="_new">${ item.url }</a></md-table-cell>
+                            <md-table-cell md-label="history" md-sort-by="email"><a :href="'/history.html?id=' + item.id">history</a></md-table-cell>
+                        </md-table-row>
+                    </md-table>
+                </md-card-content>
+            </md-card>
         </div>
     </div>
 </div>
@@ -38,7 +48,6 @@ var app = new Vue({
         getSchedules: function() {
             self = this;
             var data = axios.get('/api/schedules').then(function(response) {
-                console.log(response);
                 var schedules = [];
                 _.forEach(response.data.schedules || {}, function(value, key) {
                     value.id = key;
@@ -55,12 +64,11 @@ var app = new Vue({
 
 body {
     background-color: white;
+    padding: 6px;
 }
 
 .md-table {
-    width: 60%;
-    min-height: 400px;
-    max-height: 800px;
+    height: 80%;
 }
 
 </style>
