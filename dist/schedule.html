@@ -3,72 +3,115 @@
 {% block body %}
 <div id="app">
     <div class="md-layout">
-        <div class="md-layout-item" md-card>
-            <md-field>
-                <label>title</label>
-                <md-input v-model="schedule.title"></md-input>
-            </md-field>
-            <md-field>
-                <label>url</label>
-                <md-input v-model="schedule.url"></md-input>
-            </md-field>
+        <div class="md-layout-item">
+            <md-card id="main-card">
+                <md-card-header>
+                    <div class="md-title">
+                        <md-button href="/" class="md-icon-button md-primary">
+                            <md-icon>home</md-icon>
+                        </md-button>
+                        Schedule ${schedule && schedule.title}
+                    </div>
+                </md-card-header>
 
-            <md-field>
-                <label>trigger</label>
-                <md-select v-model="schedule.trigger">
-                    <md-option value="interval">interval</md-option>
-                    <md-option value="cron">cron</md-option>
-                </md-select>
-            </md-field>
+                <md-card-content>
 
-            <div v-if="schedule.trigger == 'interval'">
-                <md-field>
-                    <label>weeks</label>
-                    <md-input v-model="schedule.interval_weeks" type="number"></md-input>
-                </md-field>
-                <md-field>
-                    <label>days</label>
-                    <md-input v-model="schedule.interval_days" type="number"></md-input>
-                </md-field>
-                <md-field>
-                    <label>hours</label>
-                    <md-input v-model="schedule.interval_hours" type="number"></md-input>
-                </md-field>
-                <md-field>
-                    <label>minutes</label>
-                    <md-input v-model="schedule.interval_minutes" type="number"></md-input>
-                </md-field>
-                <md-field>
-                    <label>seconds</label>
-                    <md-input v-model="schedule.interval_seconds" type="number"></md-input>
-                </md-field>
-            </div>
+                    <div class="md-layout md-gutter">
+                        <div class="md-layout-item">
+                            <md-field>
+                                <label>title</label>
+                                <md-input v-model="schedule.title"></md-input>
+                            </md-field>
+                        </div>
+                        <div class="md-layout-item">
+                            <md-field>
+                                <label>url</label>
+                                <md-input v-model="schedule.url"></md-input>
+                            </md-field>
+                        </div>
+                    </div>
 
-            <div v-if="schedule.trigger == 'cron'">
-                <md-field>
-                    <label>crontab</label>
-                    <md-input v-model="schedule.cron_crontab"></md-input>
-                </md-field>
-            </div>
+                    <div class="md-layout md-gutter">
+                        <div class="md-layout-item md-size-25">
+                            <md-field>
+                                <label>trigger</label>
+                                <md-select v-model="schedule.trigger">
+                                    <md-option value="interval">interval</md-option>
+                                    <md-option value="cron">cron</md-option>
+                                </md-select>
+                            </md-field>
+                        </div>
+                        <div class="md-layout-item md-size-25">
+                            <div v-if="schedule.trigger == 'cron'">
+                                <md-field>
+                                    <label>crontab</label>
+                                    <md-input v-model="schedule.cron_crontab"></md-input>
+                                </md-field>
+                            </div>
+                        </div>
+                    </div>
 
-            <md-field>
-                <label>notify email</label>
-                <md-input v-model="schedule.email" type="email"></md-input>
-            </md-field>
-            <md-field>
-                <label>XPath selector</label>
-                <md-input v-model="schedule.xpath"></md-input>
-            </md-field>
-            <md-field>
-                <label>minimum change</label>
-                <md-input v-model="schedule.minimum_change"></md-input>
-            </md-field>
-            <md-switch v-model="schedule.enabled">enabled</md-switch>
-            
-            <br />
-            <md-button class="md-raised md-primary" @click="saveSchedule()">save</md-button>
-            <md-button class="md-raised md-accent" :disabled="!hasID()" @click="deleteSchedule()">delete</md-button>
-            <md-button href="/">back</md-button>
+                    <div v-if="schedule.trigger == 'interval'" class="md-layout md-gutter">
+                        <div class="md-layout-item md-size-20">
+                            <md-field>
+                                <label>weeks</label>
+                                <md-input v-model="schedule.interval_weeks" type="number"></md-input>
+                            </md-field>
+                        </div>
+                        <div class="md-layout-item md-size-20">
+                            <md-field>
+                                <label>days</label>
+                                <md-input v-model="schedule.interval_days" type="number"></md-input>
+                            </md-field>
+                        </div>
+                        <div class="md-layout-item md-size-20">
+                            <md-field>
+                                <label>hours</label>
+                                <md-input v-model="schedule.interval_hours" type="number"></md-input>
+                            </md-field>
+                        </div>
+                        <div class="md-layout-item md-size-20">
+                            <md-field>
+                                <label>minutes</label>
+                                <md-input v-model="schedule.interval_minutes" type="number"></md-input>
+                            </md-field>
+                        </div>
+                        <div class="md-layout-item md-size-20">
+                            <md-field>
+                                <label>seconds</label>
+                                <md-input v-model="schedule.interval_seconds" type="number"></md-input>
+                            </md-field>
+                        </div>
+                    </div>
+
+                    <div class="md-layout md-gutter">
+                        <div class="md-layout-item md-size-33">
+                            <md-field>
+                                <label>notify email</label>
+                                <md-input v-model="schedule.email" type="email"></md-input>
+                            </md-field>
+                        </div>
+                        <div class="md-layout-item md-size-33">
+                            <md-field>
+                                <label>XPath selector</label>
+                                <md-input v-model="schedule.xpath"></md-input>
+                            </md-field>
+                        </div>
+                        <div class="md-layout-item md-size-33">
+                            <md-field>
+                                <label>minimum change</label>
+                                <md-input v-model="schedule.minimum_change"></md-input>
+                            </md-field>
+                        </div>
+                    </div>
+                    <md-switch v-model="schedule.enabled">enabled</md-switch>
+                    
+                    <br />
+                    <md-button class="md-raised md-primary" @click="saveSchedule()">save</md-button>
+                    <md-button class="md-raised md-accent" :disabled="!hasID()" @click="deleteSchedule()">delete</md-button>
+                    <md-button href="/">back</md-button>
+                </md-card-content>
+            </md-card>
         </div>
     </div>
 </div>
@@ -112,12 +155,12 @@ var app = new Vue({
             var data = this.schedule;
             if (this.hasID()) {
                 axios.put('/api/schedules/' + this.id, data).then(function(response) {
-                    console.log(response);
+                    window.location = '/';
                 });
             } else {
                 axios.post('/api/schedules', data).then(function(response) {
-                    console.log(response);
-                    window.location = '/schedule.html?id=' + response.data.id;
+                    window.location = '/';
+                    /* window.location = '/schedule.html?id=' + response.data.id; */
                 });
             }
         },
@@ -137,7 +180,13 @@ var app = new Vue({
 
 body {
     background-color: white;
+    padding: 6px;
 }
+
+.md-table {
+    height: 80%;
+}
+
 
 </style>
 {% end %}

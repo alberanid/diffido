@@ -213,6 +213,7 @@ def get_history(id_):
 
 
 def get_diff(id_, commit_id='HEAD', old_commit_id=None):
+    logger.warn('MEHHHH %s  %s  %s' % (id_, commit_id, old_commit_id))
     def _history(id_, commit_id, old_commit_id, queue):
         os.chdir('storage/%s' % id_)
         p = subprocess.Popen([GIT_CMD, 'commit_id', old_commit_id or '%s~' % commit_id, commit_id],

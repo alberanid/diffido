@@ -42,7 +42,6 @@ var app = new Vue({
         getDiff: function() {
             self = this;
             var data = axios.get('/api/diff/' + this.id + '/' + this.diff + '/' + (this.oldid || '')).then(function(response) {
-                console.log(response);
                 self.difftext = response.data.diff;
                 var pretty_diff = Diff2Html.getPrettyHtml(self.difftext);
                 document.getElementById('diffpanel').innerHTML = pretty_diff;
