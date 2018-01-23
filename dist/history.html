@@ -15,9 +15,9 @@
                 </md-card-header>
                 
                 <md-card-content>
-                    <md-table id="history-table" v-model="history">
+                    <md-table id="history-table" v-model="filtered_history">
                         <md-table-toolbar>
-                            <h1 class="md-title">History</h1>
+                            <md-switch v-model="show_empty" @change="toggleShowEmpty">show entries with no changes</md-switch>
                         </md-table-toolbar>
                         <md-table-row slot="md-table-row" slot-scope="{item}">
                             <md-table-cell>
@@ -44,8 +44,10 @@ var app = new Vue({
     el: '#app',
     delimiters: ['${', '}'],
     data: {
+        show_empty: false,
         schedule: {},
         history: [],
+        filtered_history: [],
         oldid: null,
         diff: null,
         lasstid: null,
@@ -63,9 +65,22 @@ var app = new Vue({
             self = this;
             var data = axios.get('/api/history/' + this.id).then(function(response) {
                 self.history = response.data.history;
+                self.updateFilter();
                 self.schedule = response.data.schedule;
                 self.lastid = response.data.lastid;
             });
+        },
+        updateFilter: function() {
+            self = this;
+            this.filtered_history = _.filter(self.history, function(o) {
+                if (self.show_empty) {
+                    return true;
+                }
+                return o.changes;
+            });
+        },
+        toggleShowEmpty: function() {
+            this.updateFilter();
         }
     }
 });
