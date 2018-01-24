@@ -36,7 +36,8 @@ DEFAULT_CONF = 'conf/diffido.conf'
 EMAIL_FROM = 'diffido@localhost'
 GIT_CMD = 'git'
 
-re_commit = re.compile(r'[0-9a-f]{40} ')
+re_commit = re.compile(r'^(?P<id>[0-9a-f]{40}) (?P<message>.*)\n(?: .* '
+                       '(?P<insertions>\d+) insertion.* (?P<deletions>\d+) deletion.*$)?', re.M)
 re_insertion = re.compile(r'(\d+) insertion')
 re_deletion = re.compile(r'(\d+) deletion')
 
@@ -184,33 +185,12 @@ def get_history(id_):
     res = queue.get().decode('utf-8')
     p.join()
     history = []
-    res_io = io.StringIO(res)
-    while True:
-        commit_line = res_io.readline().strip()
-        if not commit_line:
-            break
-        if re_commit.match(commit_line):
-            commit_id, message = commit_line.split(' ', 1)
-        if len(commit_id) != 40:
-            continue
-        changes_line = res_io.readline().strip()
-        if re_commit.match(changes_line):
-            commit_id, message = changes_line.split(' ', 1)
-            insert = 0
-            delete = 0
-        else:
-            insert = re_insertion.findall(changes_line)
-            if insert:
-                insert = int(insert[0])
-            else:
-                insert = 0
-            delete = re_deletion.findall(changes_line)
-            if delete:
-                delete = int(delete[0])
-            else:
-                delete = 0
-        history.append({'id': commit_id, 'message': message, 'insertions': insert, 'deletions': delete,
-                        'changes': max(insert, delete)})
+    for match in re_commit.finditer(res):
+        info = match.groupdict()
+        info['insertions'] = int(info['insertions'] or 0)
+        info['deletions'] = int(info['deletions'] or 0)
+        info['changes'] = max(info['insertions'], info['deletions'])
+        history.append(info)
     lastid = None
     if history and 'id' in history[0]:
         lastid = history[0]['id']
