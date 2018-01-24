@@ -23,6 +23,7 @@
                             <md-table-cell md-label="#" md-sort-by="id" md-numeric><a :href="'/schedule.html?id=' + item.id">${ item.id }</a></md-table-cell>
                             <md-table-cell md-label="title" md-sort-by="title"><a :href="'/schedule.html?id=' + item.id">${ item.title }</a></md-table-cell>
                             <md-table-cell md-label="url" md-sort-by="email"><a :href="item.url" target="_new">${ item.url }</a></md-table-cell>
+                            <md-table-cell md-label="trigger" md-sort-by="trigger">${ triggerString(item) }</md-table-cell>
                             <md-table-cell md-label="history" md-sort-by="email">
                                 <md-button :href="'/history.html?id=' + item.id" class="md-icon-button md-primary">
                                     <md-icon>history</md-icon>
@@ -62,6 +63,24 @@ var app = new Vue({
                 });
                 self.schedules = schedules;
             });
+        },
+        triggerString: function(item) {
+            if (item.trigger == 'cron') {
+                return 'cron: ' + item.cron_crontab;
+            }
+            if (item.trigger == 'interval') {
+                trigger = 'interval: ';
+                _.each(['weeks', 'days', 'hours', 'minutes', 'seconds'], function(value, key) {
+                    if ('interval_' + value) {
+                        if (trigger) {
+                            trigger = trigger + ' ';
+                        }
+                        trigger = trigger + ''
+                    }
+                });
+                return trigger;
+            }
+            return '';
         }
     }
 });

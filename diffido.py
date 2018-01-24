@@ -36,6 +36,7 @@ DEFAULT_CONF = 'conf/diffido.conf'
 EMAIL_FROM = 'diffido@localhost'
 GIT_CMD = 'git'
 
+re_commit = re.compile(r'[0-9a-f]{40} ')
 re_insertion = re.compile(r'(\d+) insertion')
 re_deletion = re.compile(r'(\d+) deletion')
 
@@ -188,20 +189,26 @@ def get_history(id_):
         commit_line = res_io.readline().strip()
         if not commit_line:
             break
-        commit_id, message = commit_line.split(' ', 1)
+        if re_commit.match(commit_line):
+            commit_id, message = commit_line.split(' ', 1)
         if len(commit_id) != 40:
             continue
         changes_line = res_io.readline().strip()
-        insert = re_insertion.findall(changes_line)
-        if insert:
-            insert = int(insert[0])
-        else:
+        if re_commit.match(changes_line):
+            commit_id, message = changes_line.split(' ', 1)
             insert = 0
-        delete = re_deletion.findall(changes_line)
-        if delete:
-            delete = int(delete[0])
-        else:
             delete = 0
+        else:
+            insert = re_insertion.findall(changes_line)
+            if insert:
+                insert = int(insert[0])
+            else:
+                insert = 0
+            delete = re_deletion.findall(changes_line)
+            if delete:
+                delete = int(delete[0])
+            else:
+                delete = 0
         history.append({'id': commit_id, 'message': message, 'insertions': insert, 'deletions': delete,
                         'changes': max(insert, delete)})
     lastid = None
