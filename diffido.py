@@ -1,5 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""Diffido - because the F5 key is a terrible thing to waste.
+
+Copyright 2018 Davide Alberani <da@erlug.linux.it>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+"""
+
 
 import os
 import re
@@ -46,6 +61,10 @@ logger.setLevel(logging.INFO)
 
 
 def read_schedules():
+    """Return the schedules configuration.
+
+    :returns: dictionary from the JSON object in conf/schedules.json
+    :rtype: dict"""
     if not os.path.isfile(SCHEDULES_FILE):
         return {'schedules': {}}
     try:
@@ -57,11 +76,28 @@ def read_schedules():
 
 
 def write_schedules(schedules):
-    with open(SCHEDULES_FILE, 'w') as fd:
-        fd.write(json.dumps(schedules, indent=2))
+    """Write the schedules configuration.
+
+    :param schedules: the schedules to save
+    :type schedules: dict
+    :returns: True in case of success
+    :rtype: bool"""
+    try:
+        with open(SCHEDULES_FILE, 'w') as fd:
+            fd.write(json.dumps(schedules, indent=2))
+    except Exception as e:
+        logger.error('unable to write %s: %s' % (SCHEDULES_FILE, e))
+        return False
+    return True
 
 
 def next_id(schedules):
+    """Return the next available integer (as a string) in the list of schedules keys (do not fills holes)
+
+    :param schedules: the schedules
+    :type schedules: dict
+    :returns: the ID of the next schedule
+    :rtype: str"""
     ids = schedules.get('schedules', {}).keys()
     if not ids:
         return '1'
@@ -69,7 +105,18 @@ def next_id(schedules):
 
 
 def get_schedule(id_, add_id=True):
-    schedules = read_schedules()
+    """Return information about a single schedule
+
+    :param id_: ID of the schedule
+    :type id_: str
+    :param add_id: if True, add the ID in the dictionary
+    :type add_id: bool
+    :returns: the schedule
+    :rtype: dict"""
+    try:
+        schedules = read_schedules()
+    except Exception:
+        return {}
     data = schedules.get('schedules', {}).get(id_, {})
     if add_id:
         data['id'] = str(id_)
@@ -77,6 +124,14 @@ def get_schedule(id_, add_id=True):
 
 
 def select_xpath(content, xpath):
+    """Select a portion of a HTML document
+
+    :param content: the content of the document
+    :type content: str
+    :param xpath: the XPath selector
+    :type xpath: str
+    :returns: the selected document
+    :rtype: str"""
     fd = io.StringIO(content)
     tree = etree.parse(fd)
     elems = tree.xpath(xpath)
@@ -91,16 +146,29 @@ def select_xpath(content, xpath):
 
 
 def run_job(id_=None, *args, **kwargs):
+    """Run a job
+
+    :param id_: ID of the schedule to run
+    :type id_: str
+    :param args: positional arguments
+    :type args: tuple
+    :param kwargs: named arguments
+    :type kwargs: dict
+    :returns: True in case of success
+    :rtype: bool"""
     schedule = get_schedule(id_, add_id=False)
     url = schedule.get('url')
     if not url:
-        return
-    logger.debug('Running job id:%s title:%s url: %s' % (id_, schedule.get('title', ''), url))
+        return False
+    logger.debug('running job id:%s title:%s url: %s' % (id_, schedule.get('title', ''), url))
     req = requests.get(url, allow_redirects=True, timeout=(30.10, 240))
     content = req.text
     xpath = schedule.get('xpath')
     if xpath:
-        content = select_xpath(content, xpath)
+        try:
+            content = select_xpath(content, xpath)
+        except Exception as e:
+            logger.warn('unable to extract XPath %s: %s' % (xpath, e))
     req_path = urllib.parse.urlparse(req.url).path
     base_name = os.path.basename(req_path) or 'index.html'
     def _commit(id_, filename, content, queue):
@@ -137,17 +205,17 @@ def run_job(id_=None, *args, **kwargs):
     p.join()
     email = schedule.get('email')
     if not email:
-        return
+        return True
     changes = res.get('changes')
     if not changes:
-        return
+        return True
     min_change = schedule.get('minimum_change')
     previous_lines = res.get('previous_lines')
     if min_change and previous_lines:
         min_change = float(min_change)
         change_fraction = res.get('changes') / previous_lines
         if change_fraction < min_change:
-            return
+            return True
     # send notification
     diff = get_diff(id_).get('diff')
     if not diff:
@@ -157,6 +225,16 @@ def run_job(id_=None, *args, **kwargs):
 
 
 def safe_run_job(id_=None, *args, **kwargs):
+    """Safely run a job, catching all the exceptions
+
+    :param id_: ID of the schedule to run
+    :type id_: str
+    :param args: positional arguments
+    :type args: tuple
+    :param kwargs: named arguments
+    :type kwargs: dict
+    :returns: True in case of success
+    :rtype: bool"""
     try:
         run_job(id_, *args, **kwargs)
     except Exception as e:
@@ -164,16 +242,34 @@ def safe_run_job(id_=None, *args, **kwargs):
 
 
 def send_email(to, subject='diffido', body='', from_=None):
+    """Send an email
+
+    :param to: destination address
+    :type to: str
+    :param subject: email subject
+    :type subject: str
+    :param body: body of the email
+    :type body: str
+    :param from_: sender address
+    :type from_: str
+    :returns: True in case of success
+    :rtype: bool"""
     msg = MIMEText(body)
     msg['Subject'] = subject
     msg['From'] = from_ or EMAIL_FROM
     msg['To'] = to
-    s = smtplib.SMTP('localhost')
-    s.send_message(msg)
-    s.quit()
+    with smtplib.SMTP('localhost') as s:
+        s.send_message(msg)
+    return True
 
 
 def get_history(id_):
+    """Read the history of a schedule
+
+    :param id_: ID of the schedule
+    :type id_: str
+    :returns: information about the schedule and its history
+    :rtype: dict"""
     def _history(id_, queue):
         os.chdir('storage/%s' % id_)
         p = subprocess.Popen([GIT_CMD, 'log', '--pretty=oneline', '--shortstat'], stdout=subprocess.PIPE)
@@ -201,6 +297,16 @@ def get_history(id_):
 
 
 def get_diff(id_, commit_id='HEAD', old_commit_id=None):
+    """Return the diff between commits of a schedule
+
+    :param id_: ID of the schedule
+    :type id_: str
+    :param commit_id: the most recent commit ID; HEAD by default
+    :type commit_id: str
+    :param old_commit_id: the older commit ID; if None, the previous commit is used
+    :type old_commit_id: str
+    :returns: information about the schedule and the diff between commits
+    :rtype: dict"""
     def _history(id_, commit_id, old_commit_id, queue):
         os.chdir('storage/%s' % id_)
         p = subprocess.Popen([GIT_CMD, 'diff', old_commit_id or '%s~' % commit_id, commit_id],
@@ -217,50 +323,115 @@ def get_diff(id_, commit_id='HEAD', old_commit_id=None):
 
 
 def scheduler_update(scheduler, id_):
+    """Update a scheduler job, using information from the JSON object
+
+    :param scheduler: the TornadoScheduler instance to modify
+    :type scheduler: TornadoScheduler
+    :param id_: ID of the schedule that must be updated
+    :type id_: str
+    :returns: True in case of success
+    :rtype: bool"""
     schedule = get_schedule(id_, add_id=False)
     if not schedule:
-        return
+        logger.warn('unable to update empty schedule %s' % id_)
+        return False
     trigger = schedule.get('trigger')
     if trigger not in ('interval', 'cron'):
-        return
+        logger.warn('unable to update empty schedule %s: trigger not in ("cron", "interval")' % id_)
+        return False
     args = {}
     if trigger == 'interval':
         args['trigger'] = 'interval'
         for unit in 'weeks', 'days', 'hours', 'minutes', 'seconds':
             if 'interval_%s' % unit not in schedule:
                 continue
-            args[unit] = int(schedule['interval_%s' % unit])
+            try:
+                args[unit] = int(schedule['interval_%s' % unit])
+            except Exception:
+                logger.warn('invalid argument on schedule %s: %s parameter %s is not an integer' %
+                            (id_, 'interval_%s' % unit, schedule['interval_%s' % unit]))
     elif trigger == 'cron':
-        cron_trigger = CronTrigger.from_crontab(schedule.get('cron_crontab'))
-        args['trigger'] = cron_trigger
+        try:
+            cron_trigger = CronTrigger.from_crontab(schedule['cron_crontab'])
+            args['trigger'] = cron_trigger
+        except Exception:
+            logger.warn('invalid argument on schedule %s: cron_tab parameter %s is not a valid crontab' %
+                        (id_, schedule.get('cron_crontab')))
     git_create_repo(id_)
-    scheduler.add_job(safe_run_job, id=id_, replace_existing=True, kwargs={'id_': id_}, **args)
+    try:
+        scheduler.add_job(safe_run_job, id=id_, replace_existing=True, kwargs={'id_': id_}, **args)
+    except Exception as e:
+        logger.warn('unable to update job %s: %s' % (id_, e))
+        return False
+    return True
 
 
 def scheduler_delete(scheduler, id_):
-    scheduler.remove_job(job_id=id_)
-    git_delete_repo(id_)
+    """Update a scheduler job, using information from the JSON object
+
+    :param scheduler: the TornadoScheduler instance to modify
+    :type scheduler: TornadoScheduler
+    :param id_: ID of the schedule
+    :type id_: str
+    :returns: True in case of success
+    :rtype: bool"""
+    try:
+        scheduler.remove_job(job_id=id_)
+    except Exception as e:
+        logger.warn('unable to delete job %s: %s' % (id_, e))
+        return False
+    return git_delete_repo(id_)
 
 
 def reset_from_schedules(scheduler):
-    scheduler.remove_all_jobs()
-    for key in read_schedules().get('schedules', {}).keys():
-        scheduler_update(scheduler, id_=key)
+    """"Reset all scheduler jobs, using information from the JSON object
+
+    :param scheduler: the TornadoScheduler instance to modify
+    :type scheduler: TornadoScheduler
+    :returns: True in case of success
+    :rtype: bool"""
+    ret = False
+    try:
+        scheduler.remove_all_jobs()
+        for key in read_schedules().get('schedules', {}).keys():
+            ret |= scheduler_update(scheduler, id_=key)
+    except Exception as e:
+        logger.warn('unable to reset all jobs: %s' % e)
+        return False
+    return ret
 
 
 def git_create_repo(id_):
+    """Create a Git repository
+
+    :param id_: ID of the schedule
+    :type id_: str
+    :returns: True in case of success
+    :rtype: bool"""
     repo_dir = 'storage/%s' % id_
     if os.path.isdir(repo_dir):
-        return
+        return True
     p = subprocess.Popen([GIT_CMD, 'init', repo_dir])
     p.communicate()
+    return p.returncode == 0
 
 
 def git_delete_repo(id_):
+    """Delete a Git repository
+
+    :param id_: ID of the schedule
+    :type id_: str
+    :returns: True in case of success
+    :rtype: bool"""
     repo_dir = 'storage/%s' % id_
     if not os.path.isdir(repo_dir):
-        return
-    shutil.rmtree(repo_dir)
+        return False
+    try:
+        shutil.rmtree(repo_dir)
+    except Exception as e:
+        logger.warn('unable to delete Git repository %s: %s' % (id_, e))
+        return False
+    return True
 
 
 class DiffidoBaseException(Exception):
@@ -278,13 +449,6 @@ class DiffidoBaseException(Exception):
 
 class BaseHandler(tornado.web.RequestHandler):
     """Base class for request handlers."""
-    # Cache currently connected users.
-    _users_cache = {}
-
-    # set of documents we're managing (a collection in MongoDB or a table in a SQL database)
-    document = None
-    collection = None
-
     # A property to access the first value of each argument.
     arguments = property(lambda self: dict([(k, v[0].decode('utf-8'))
                                             for k, v in self.request.arguments.items()]))
@@ -306,10 +470,6 @@ class BaseHandler(tornado.web.RequestHandler):
         else:
             message = 'internal error'
         self.build_error(message, status=status_code)
-
-    def is_api(self):
-        """Return True if the path is from an API call."""
-        return self.request.path.startswith('/v%s' % API_VERSION)
 
     def initialize(self, **kwargs):
         """Add every passed (key, value) as attributes of the instance."""
@@ -340,16 +500,18 @@ class BaseHandler(tornado.web.RequestHandler):
 
 
 class SchedulesHandler(BaseHandler):
+    """Schedules handler."""
     @gen.coroutine
     def get(self, id_=None, *args, **kwargs):
+        """Get a schedule."""
         if id_ is not None:
-            self.write({'schedule': get_schedule(id_)})
-            return
+            return self.write({'schedule': get_schedule(id_)})
         schedules = read_schedules()
         self.write(schedules)
 
     @gen.coroutine
     def put(self, id_=None, *args, **kwargs):
+        """Update a schedule."""
         if id_ is None:
             return self.build_error(message='update action requires an ID')
         data = self.clean_body
@@ -363,6 +525,7 @@ class SchedulesHandler(BaseHandler):
 
     @gen.coroutine
     def post(self, *args, **kwargs):
+        """Add a schedule."""
         data = self.clean_body
         schedules = read_schedules()
         id_ = next_id(schedules)
@@ -373,6 +536,7 @@ class SchedulesHandler(BaseHandler):
 
     @gen.coroutine
     def delete(self, id_=None, *args, **kwargs):
+        """Delete a schedule."""
         if id_ is None:
             return self.build_error(message='an ID must be specified')
         schedules = read_schedules()
@@ -384,29 +548,31 @@ class SchedulesHandler(BaseHandler):
 
 
 class ResetSchedulesHandler(BaseHandler):
+    """Reset schedules handler."""
     @gen.coroutine
     def post(self, *args, **kwargs):
         reset_from_schedules(self.scheduler)
 
 
 class HistoryHandler(BaseHandler):
+    """History handler."""
     @gen.coroutine
     def get(self, id_, *args, **kwargs):
         self.write(get_history(id_))
 
 
 class DiffHandler(BaseHandler):
+    """Diff handler."""
     @gen.coroutine
     def get(self, id_, commit_id, old_commit_id=None, *args, **kwargs):
         self.write(get_diff(id_, commit_id, old_commit_id))
 
 
 class TemplateHandler(BaseHandler):
-    """Handler for the / path."""
-    app_path = os.path.join(os.path.dirname(__file__), "dist")
-
+    """Handler for the template files in the / path."""
     @gen.coroutine
     def get(self, *args, **kwargs):
+        """Get a template file."""
         page = 'index.html'
         if args and args[0]:
             page = args[0].strip('/')
@@ -415,6 +581,7 @@ class TemplateHandler(BaseHandler):
 
 
 def serve():
+    """Read configuration and start the server."""
     global EMAIL_FROM
     jobstores = {'default': SQLAlchemyJobStore(url=JOBS_STORE)}
     scheduler = TornadoScheduler(jobstores=jobstores)
@@ -469,7 +636,6 @@ def serve():
                                                  options.address if options.address else '127.0.0.1',
                                                  options.port)
     http_server.listen(options.port, options.address)
-
     try:
         IOLoop.instance().start()
     except (KeyboardInterrupt, SystemExit):
