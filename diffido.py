@@ -15,7 +15,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-
 import os
 import re
 import io
@@ -43,6 +42,7 @@ import tornado.options
 from tornado.options import define, options
 import tornado.web
 from tornado import gen, escape
+
 
 JOBS_STORE = 'sqlite:///conf/jobs.db'
 API_VERSION = '1.0'
