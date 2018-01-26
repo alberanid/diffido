@@ -156,11 +156,13 @@ def select_xpath(content, xpath):
     return content
 
 
-def run_job(id_=None, *args, **kwargs):
+def run_job(id_=None, force=False, *args, **kwargs):
     """Run a job
 
     :param id_: ID of the schedule to run
     :type id_: str
+    :param force: run even if disabled
+    :type force: bool
     :param args: positional arguments
     :type args: tuple
     :param kwargs: named arguments
@@ -172,7 +174,7 @@ def run_job(id_=None, *args, **kwargs):
     if not url:
         return False
     logger.debug('running job id:%s title:%s url: %s' % (id_, schedule.get('title', ''), url))
-    if not schedule.get('enabled'):
+    if not schedule.get('enabled') and not force:
         logger.info('not running job %s: disabled' % id_)
         return True
     req = requests.get(url, allow_redirects=True, timeout=(30.10, 240))
@@ -283,20 +285,24 @@ def send_email(to, subject='diffido', body='', from_=None):
             value = int(value)
         key = key.replace('smtp-', '', 1).replace('-', '_')
         args[key] = value
-    if use_ssl:
-        with smtplib.SMTP_SSL(**args) as s:
-            s.send_message(msg)
-    else:
-        tls_args = {}
-        for key in ('ssl_keyfile', 'ssl_certfile', 'ssl_context'):
-            if key in args:
-                tls_args = args[key]
-                del args[key]
-        with smtplib.SMTP(**args) as s:
-            if starttls:
-                s.starttls(**tls_args)
-                s.ehlo_or_helo_if_needed()
-            s.send_message(msg)
+    try:
+        if use_ssl:
+            with smtplib.SMTP_SSL(**args) as s:
+                s.send_message(msg)
+        else:
+            tls_args = {}
+            for key in ('ssl_keyfile', 'ssl_certfile', 'ssl_context'):
+                if key in args:
+                    tls_args = args[key]
+                    del args[key]
+            with smtplib.SMTP(**args) as s:
+                if starttls:
+                    s.starttls(**tls_args)
+                    s.ehlo_or_helo_if_needed()
+                s.send_message(msg)
+    except Exception as e:
+        logger.error('unable to send email to %s: %s' % (to, e))
+        return False
     return True
 
 
@@ -458,6 +464,14 @@ def reset_from_schedules(scheduler):
     return ret
 
 
+def git_init():
+    """Initialize Git global settings"""
+    p = subprocess.Popen([GIT_CMD, 'config', '--global', 'user.email', '"%s"' % EMAIL_FROM])
+    p.communicate()
+    p = subprocess.Popen([GIT_CMD, 'config', '--global', 'user.name', '"Diffido"'])
+    p.communicate()
+
+
 def git_create_repo(id_):
     """Create a Git repository
 
@@ -608,7 +622,7 @@ class RunScheduleHandler(BaseHandler):
     """Reset schedules handler."""
     @gen.coroutine
     def post(self, id_, *args, **kwargs):
-        if run_job(id_):
+        if run_job(id_, force=True):
             return self.build_success('job run')
         self.build_error('job not run')
 
@@ -690,6 +704,7 @@ def serve():
 
     init_params = dict(listen_port=options.port, logger=logger, ssl_options=ssl_options,
                        scheduler=scheduler)
+    git_init()
 
     _reset_schedules_path = r'schedules/reset'
     _schedule_run_path = r'schedules/(?P<id_>\d+)/run'
@@ -717,7 +732,6 @@ def serve():
                                                  options.address if options.address else '127.0.0.1',
                                                  options.port)
     http_server.listen(options.port, options.address)
-    send_email('da@localhost', 'meh', 'molto meh')
     try:
         IOLoop.instance().start()
     except (KeyboardInterrupt, SystemExit):
