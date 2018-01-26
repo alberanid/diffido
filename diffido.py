@@ -19,6 +19,7 @@ import os
 import re
 import io
 import json
+import pytz
 import shutil
 import urllib
 import smtplib
@@ -318,7 +319,10 @@ def get_history(id_, limit=None, add_info=False):
     :returns: information about the schedule and its history
     :rtype: dict"""
     def _history(id_, limit, queue):
-        os.chdir('storage/%s' % id_)
+        try:
+            os.chdir('storage/%s' % id_)
+        except:
+            return queue.put(b'')
         cmd = [GIT_CMD, 'log', '--pretty=oneline', '--shortstat']
         if limit is not None:
             cmd.append('-%s' % limit)
@@ -356,7 +360,8 @@ def get_last_history(id_):
     :returns: information about the schedule and its history
     :rtype: dict"""
     history = get_history(id_, limit=1)
-    return history.get('history', [{}])[0]
+    hist = history.get('history') or [{}]
+    return hist[0]
 
 
 def get_diff(id_, commit_id='HEAD', old_commit_id=None):
@@ -409,10 +414,16 @@ def scheduler_update(scheduler, id_):
             if 'interval_%s' % unit not in schedule:
                 continue
             try:
-                args[unit] = int(schedule['interval_%s' % unit])
+                val = schedule['interval_%s' % unit]
+                if not val:
+                    continue
+                args[unit] = int(val)
             except Exception:
                 logger.warn('invalid argument on schedule %s: %s parameter %s is not an integer' %
                             (id_, 'interval_%s' % unit, schedule['interval_%s' % unit]))
+        if len(args) == 1:
+            logger.error('no valid interval specified, skipping schedule %s' % id_)
+            return False
     elif trigger == 'cron':
         try:
             cron_trigger = CronTrigger.from_crontab(schedule['cron_crontab'])
@@ -420,6 +431,7 @@ def scheduler_update(scheduler, id_):
         except Exception:
             logger.warn('invalid argument on schedule %s: cron_tab parameter %s is not a valid crontab' %
                         (id_, schedule.get('cron_crontab')))
+            return False
     git_create_repo(id_)
     try:
         scheduler.add_job(safe_run_job, id=id_, replace_existing=True, kwargs={'id_': id_}, **args)
@@ -664,7 +676,7 @@ def serve():
     """Read configuration and start the server."""
     global EMAIL_FROM, SMTP_SETTINGS
     jobstores = {'default': SQLAlchemyJobStore(url=JOBS_STORE)}
-    scheduler = TornadoScheduler(jobstores=jobstores)
+    scheduler = TornadoScheduler(jobstores=jobstores, timezone=pytz.utc)
     scheduler.start()
 
     define('port', default=3210, help='run on the given port', type=int)
