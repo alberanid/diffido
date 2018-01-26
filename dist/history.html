@@ -18,6 +18,10 @@
                     <md-table id="history-table" v-model="filtered_history">
                         <md-table-toolbar>
                             <md-switch v-model="show_empty" @change="toggleShowEmpty">show entries with no changes</md-switch>
+                            <br />
+                            <md-button class="md-button md-primary" @click="compareSelected()" :disabled="!(oldid && diff)">
+                                Compare selected revisions
+                            </md-button>
                         </md-table-toolbar>
                         <md-table-row slot="md-table-row" slot-scope="{item}">
                             <md-table-cell>
@@ -80,6 +84,12 @@ var app = new Vue({
         },
         toggleShowEmpty: function() {
             this.updateFilter();
+        },
+        compareSelected: function() {
+            if (!(this.oldid && this.diff)) {
+                return;
+            }
+            window.location = '/diff.html?id=' + this.id + '&oldid=' + this.oldid + '&diff=' + this.diff;
         }
     }
 });
