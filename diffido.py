@@ -709,19 +709,19 @@ def serve():
     _reset_schedules_path = r'schedules/reset'
     _schedule_run_path = r'schedules/(?P<id_>\d+)/run'
     _schedules_path = r'schedules/?(?P<id_>\d+)?'
-    _history_path = r'history/?(?P<id_>\d+)'
-    _diff_path = r'diff/(?P<id_>\d+)/(?P<commit_id>[0-9a-f]+)/?(?P<old_commit_id>[0-9a-f]+)?/?'
+    _history_path = r'schedules/?(?P<id_>\d+)/history'
+    _diff_path = r'schedules/(?P<id_>\d+)/diff/(?P<commit_id>[0-9a-f]+)/?(?P<old_commit_id>[0-9a-f]+)?/?'
     application = tornado.web.Application([
             (r'/api/%s' % _reset_schedules_path, ResetSchedulesHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _reset_schedules_path), ResetSchedulesHandler, init_params),
             (r'/api/%s' % _schedule_run_path, RunScheduleHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _schedule_run_path), RunScheduleHandler, init_params),
-            (r'/api/%s' % _schedules_path, SchedulesHandler, init_params),
-            (r'/api/v%s/%s' % (API_VERSION, _schedules_path), SchedulesHandler, init_params),
             (r'/api/%s' % _history_path, HistoryHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _history_path), HistoryHandler, init_params),
             (r'/api/%s' % _diff_path, DiffHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _diff_path), DiffHandler, init_params),
+            (r'/api/%s' % _schedules_path, SchedulesHandler, init_params),
+            (r'/api/v%s/%s' % (API_VERSION, _schedules_path), SchedulesHandler, init_params),
             (r'/?(.*)', TemplateHandler, init_params),
         ],
         static_path=os.path.join(os.path.dirname(__file__), 'dist/static'),

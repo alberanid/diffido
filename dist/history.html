@@ -63,7 +63,7 @@ var app = new Vue({
     methods: {
         getHistory: function() {
             self = this;
-            var data = axios.get('/api/history/' + this.id).then(function(response) {
+            var data = axios.get('/api/schedules/' + this.id + '/history').then(function(response) {
                 self.history = response.data.history;
                 self.updateFilter();
                 self.schedule = response.data.schedule;

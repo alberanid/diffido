@@ -60,7 +60,7 @@ var app = new Vue({
     methods: {
         getDiff: function() {
             self = this;
-            var data = axios.get('/api/diff/' + this.id + '/' + this.diff + '/' + (this.oldid || '')).then(function(response) {
+            var data = axios.get('/api/schedules/' + this.id + '/diff/' + this.diff + '/' + (this.oldid || '')).then(function(response) {
                 self.schedule = response.data.schedule;
                 self.difftext = response.data.diff;
                 var current_size = document.getElementById('diffpanel').offsetWidth;
