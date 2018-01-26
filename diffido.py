@@ -49,6 +49,7 @@ API_VERSION = '1.0'
 SCHEDULES_FILE = 'conf/schedules.json'
 DEFAULT_CONF = 'conf/diffido.conf'
 EMAIL_FROM = 'diffido@localhost'
+SMTP_SETTINGS = {}
 GIT_CMD = 'git'
 
 re_commit = re.compile(r'^(?P<id>[0-9a-f]{40}) (?P<message>.*)\n(?: .* '
@@ -272,8 +273,30 @@ def send_email(to, subject='diffido', body='', from_=None):
     msg['Subject'] = subject
     msg['From'] = from_ or EMAIL_FROM
     msg['To'] = to
-    with smtplib.SMTP('localhost') as s:
-        s.send_message(msg)
+    starttls = SMTP_SETTINGS.get('smtp-starttls')
+    use_ssl = SMTP_SETTINGS.get('smtp-use-ssl')
+    args = {}
+    for key, value in SMTP_SETTINGS.items():
+        if key in ('smtp-starttls', 'smtp-use-ssl'):
+            continue
+        if key in ('smtp-port'):
+            value = int(value)
+        key = key.replace('smtp-', '', 1).replace('-', '_')
+        args[key] = value
+    if use_ssl:
+        with smtplib.SMTP_SSL(**args) as s:
+            s.send_message(msg)
+    else:
+        tls_args = {}
+        for key in ('ssl_keyfile', 'ssl_certfile', 'ssl_context'):
+            if key in args:
+                tls_args = args[key]
+                del args[key]
+        with smtplib.SMTP(**args) as s:
+            if starttls:
+                s.starttls(**tls_args)
+                s.ehlo_or_helo_if_needed()
+            s.send_message(msg)
     return True
 
 
@@ -625,7 +648,7 @@ class TemplateHandler(BaseHandler):
 
 def serve():
     """Read configuration and start the server."""
-    global EMAIL_FROM
+    global EMAIL_FROM, SMTP_SETTINGS
     jobstores = {'default': SQLAlchemyJobStore(url=JOBS_STORE)}
     scheduler = TornadoScheduler(jobstores=jobstores)
     scheduler.start()
@@ -637,7 +660,15 @@ def serve():
     define('ssl_key', default=os.path.join(os.path.dirname(__file__), 'ssl', 'diffido_key.pem'),
             help='specify the SSL private key to use for secure connections')
     define('admin-email', default='', help='email address of the site administrator', type=str)
-    define('debug', default=False, help='run in debug mode')
+    define('smtp-host', default='localhost', help='SMTP server address', type=str)
+    define('smtp-port', default=0, help='SMTP server port', type=int)
+    define('smtp-local-hostname', default=None, help='SMTP local hostname', type=str)
+    define('smtp-use-ssl', default=False, help='Use SSL to connect to the SMTP server', type=bool)
+    define('smtp-starttls', default=False, help='Use STARTTLS to connect to the SMTP server', type=bool)
+    define('smtp-ssl-keyfile', default=None, help='SSL key file', type=str)
+    define('smtp-ssl-certfile', default=None, help='SSL cert file', type=str)
+    define('smtp-ssl-context', default=None, help='SSL context', type=str)
+    define('debug', default=False, help='run in debug mode', type=bool)
     define('config', help='read configuration file',
             callback=lambda path: tornado.options.parse_config_file(path, final=False))
     if not options.config and os.path.isfile(DEFAULT_CONF):
@@ -645,6 +676,10 @@ def serve():
     tornado.options.parse_command_line()
     if options.admin_email:
         EMAIL_FROM = options.admin_email
+
+    for key, value in options.as_dict().items():
+        if key.startswith('smtp-'):
+            SMTP_SETTINGS[key] = value
 
     if options.debug:
         logger.setLevel(logging.DEBUG)
@@ -682,6 +717,7 @@ def serve():
                                                  options.address if options.address else '127.0.0.1',
                                                  options.port)
     http_server.listen(options.port, options.address)
+    send_email('da@localhost', 'meh', 'molto meh')
     try:
         IOLoop.instance().start()
     except (KeyboardInterrupt, SystemExit):
