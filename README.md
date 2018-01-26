@@ -47,7 +47,7 @@ You can edit the *conf/diffido.conf* file (Python syntax) to change the global s
 
 Each schedule has its own web page GUI; the settings should be pretty self-explanatory, except:
 
-- **XPath seelctor**: define which portion of a web page to consider
+- **XPath selector**: define which portion of a web page to consider
 - **minimum change**: float between 0.0 and 1.0, which represent the minimum amount of the page (in percentage of number of lines) that has to be changed to send a notification; if left empty, any change will be notified
 - **crontab**: a complete crontab definition, to specify the period of the check
 
