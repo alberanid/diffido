@@ -69,7 +69,15 @@ def read_schedules():
         return {'schedules': {}}
     try:
         with open(SCHEDULES_FILE, 'r') as fd:
-            return json.loads(fd.read())
+            schedules = json.loads(fd.read())
+            for id_ in schedules.get('schedules', {}).keys():
+                schedule = schedules['schedules'][id_]
+                try:
+                    schedule['last_history'] = get_last_history(id_)
+                except:
+                    schedule['last_history'] = {}
+                    continue
+            return schedules
     except Exception as e:
         logger.error('unable to read %s: %s' % (SCHEDULES_FILE, e))
         return {'schedules': {}}
@@ -104,7 +112,7 @@ def next_id(schedules):
     return str(max([int(i) for i in ids]) + 1)
 
 
-def get_schedule(id_, add_id=True):
+def get_schedule(id_, add_id=True, add_history=False):
     """Return information about a single schedule
 
     :param id_: ID of the schedule
@@ -118,6 +126,8 @@ def get_schedule(id_, add_id=True):
     except Exception:
         return {}
     data = schedules.get('schedules', {}).get(id_, {})
+    if add_history and data:
+        data['last_history'] = get_last_history(id_)
     if add_id:
         data['id'] = str(id_)
     return data
@@ -161,6 +171,9 @@ def run_job(id_=None, *args, **kwargs):
     if not url:
         return False
     logger.debug('running job id:%s title:%s url: %s' % (id_, schedule.get('title', ''), url))
+    if not schedule.get('enabled'):
+        logger.info('not running job %s: disabled' % id_)
+        return True
     req = requests.get(url, allow_redirects=True, timeout=(30.10, 240))
     content = req.text
     xpath = schedule.get('xpath')
@@ -219,9 +232,10 @@ def run_job(id_=None, *args, **kwargs):
     # send notification
     diff = get_diff(id_).get('diff')
     if not diff:
-        return
+        return True
     send_email(to=email, subject='%s page changed' % schedule.get('title'),
                body='changes:\n\n%s' % diff)
+    return True
 
 
 def safe_run_job(id_=None, *args, **kwargs):
@@ -263,20 +277,27 @@ def send_email(to, subject='diffido', body='', from_=None):
     return True
 
 
-def get_history(id_):
+def get_history(id_, limit=None, add_info=False):
     """Read the history of a schedule
 
     :param id_: ID of the schedule
     :type id_: str
+    :param limit: number of entries to fetch
+    :type limit: int
+    :param add_info: add information about the schedule itself
+    :type add_info: int
     :returns: information about the schedule and its history
     :rtype: dict"""
-    def _history(id_, queue):
+    def _history(id_, limit, queue):
         os.chdir('storage/%s' % id_)
-        p = subprocess.Popen([GIT_CMD, 'log', '--pretty=oneline', '--shortstat'], stdout=subprocess.PIPE)
+        cmd = [GIT_CMD, 'log', '--pretty=oneline', '--shortstat']
+        if limit is not None:
+            cmd.append('-%s' % limit)
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
         stdout, _ = p.communicate()
         queue.put(stdout)
     queue = multiprocessing.Queue()
-    p = multiprocessing.Process(target=_history, args=(id_, queue))
+    p = multiprocessing.Process(target=_history, args=(id_, limit, queue))
     p.start()
     res = queue.get().decode('utf-8')
     p.join()
@@ -287,13 +308,26 @@ def get_history(id_):
         info['deletions'] = int(info['deletions'] or 0)
         info['changes'] = max(info['insertions'], info['deletions'])
         history.append(info)
-    lastid = None
+    last_id = None
     if history and 'id' in history[0]:
-        lastid = history[0]['id']
+        last_id = history[0]['id']
     for idx, item in enumerate(history):
         item['seq'] = idx + 1
-    schedule = get_schedule(id_)
-    return {'history': history, 'lastid': lastid, 'schedule': schedule}
+    data = {'history': history, 'last_id': last_id}
+    if add_info:
+        data['schedule'] = get_schedule(id_)
+    return data
+
+
+def get_last_history(id_):
+    """Read the last history entry of a schedule
+
+    :param id_: ID of the schedule
+    :type id_: str
+    :returns: information about the schedule and its history
+    :rtype: dict"""
+    history = get_history(id_, limit=1)
+    return history.get('history', [{}])[0]
 
 
 def get_diff(id_, commit_id='HEAD', old_commit_id=None):
@@ -505,7 +539,7 @@ class SchedulesHandler(BaseHandler):
     def get(self, id_=None, *args, **kwargs):
         """Get a schedule."""
         if id_ is not None:
-            return self.write({'schedule': get_schedule(id_)})
+            return self.write({'schedule': get_schedule(id_, add_history=True)})
         schedules = read_schedules()
         self.write(schedules)
 
@@ -547,6 +581,15 @@ class SchedulesHandler(BaseHandler):
         self.build_success(message='removed schedule %s' % id_)
 
 
+class RunScheduleHandler(BaseHandler):
+    """Reset schedules handler."""
+    @gen.coroutine
+    def post(self, id_, *args, **kwargs):
+        if run_job(id_):
+            return self.build_success('job run')
+        self.build_error('job not run')
+
+
 class ResetSchedulesHandler(BaseHandler):
     """Reset schedules handler."""
     @gen.coroutine
@@ -558,7 +601,7 @@ class HistoryHandler(BaseHandler):
     """History handler."""
     @gen.coroutine
     def get(self, id_, *args, **kwargs):
-        self.write(get_history(id_))
+        self.write(get_history(id_, add_info=True))
 
 
 class DiffHandler(BaseHandler):
@@ -614,12 +657,15 @@ def serve():
                        scheduler=scheduler)
 
     _reset_schedules_path = r'schedules/reset'
+    _schedule_run_path = r'schedules/(?P<id_>\d+)/run'
     _schedules_path = r'schedules/?(?P<id_>\d+)?'
     _history_path = r'history/?(?P<id_>\d+)'
     _diff_path = r'diff/(?P<id_>\d+)/(?P<commit_id>[0-9a-f]+)/?(?P<old_commit_id>[0-9a-f]+)?/?'
     application = tornado.web.Application([
             (r'/api/%s' % _reset_schedules_path, ResetSchedulesHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _reset_schedules_path), ResetSchedulesHandler, init_params),
+            (r'/api/%s' % _schedule_run_path, RunScheduleHandler, init_params),
+            (r'/api/v%s/%s' % (API_VERSION, _schedule_run_path), RunScheduleHandler, init_params),
             (r'/api/%s' % _schedules_path, SchedulesHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _schedules_path), SchedulesHandler, init_params),
             (r'/api/%s' % _history_path, HistoryHandler, init_params),

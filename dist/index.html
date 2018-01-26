@@ -21,12 +21,22 @@
                     <md-table id="schedules-table" v-model="schedules">
                         <md-table-row slot="md-table-row" slot-scope="{item}">
                             <md-table-cell md-label="#" md-sort-by="id" md-numeric><a :href="'/schedule.html?id=' + item.id">${ item.id }</a></md-table-cell>
+                            <md-table-cell md-label="enabled" md-sort-by="enabled">
+                                <md-icon v-if="item.enabled">check_box</md-icon>
+                                <md-icon v-if="!item.enabled">check_box_outline_blank</md-icon>
+                            </md-table-cell>
                             <md-table-cell md-label="title" md-sort-by="title"><a :href="'/schedule.html?id=' + item.id">${ item.title }</a></md-table-cell>
-                            <md-table-cell md-label="url" md-sort-by="email"><a :href="item.url" target="_new">${ item.url }</a></md-table-cell>
+                            <md-table-cell md-label="url" md-sort-by="url"><a :href="item.url" target="_new">${ item.url }</a></md-table-cell>
                             <md-table-cell md-label="trigger" md-sort-by="trigger">${ triggerString(item) }</md-table-cell>
-                            <md-table-cell md-label="history" md-sort-by="email">
+                            <md-table-cell md-label="last check" md-sort-by="last_history">${ item.last_history && item.last_history.message }</md-table-cell>
+                            <md-table-cell md-label="history">
                                 <md-button :href="'/history.html?id=' + item.id" class="md-icon-button md-primary">
                                     <md-icon>history</md-icon>
+                                </md-button>
+                            </md-table-cell>
+                            <md-table-cell md-label="run now">
+                                <md-button class="md-icon-button md-primary" @click="runSchedule(item.id)">
+                                    <md-icon>play_circle_outline</md-icon>
                                 </md-button>
                             </md-table-cell>
                         </md-table-row>
@@ -50,11 +60,9 @@ var app = new Vue({
     mounted: function() {
         this.getSchedules();
     },
-    computed: {
-    },
     methods: {
         getSchedules: function() {
-            self = this;
+            var self = this;
             var data = axios.get('/api/schedules').then(function(response) {
                 var schedules = [];
                 _.forEach(response.data.schedules || {}, function(value, key) {
@@ -69,18 +77,28 @@ var app = new Vue({
                 return 'cron: ' + item.cron_crontab;
             }
             if (item.trigger == 'interval') {
-                trigger = 'interval: ';
+                var text = 'interval: ';
+                var pieces = [];
                 _.each(['weeks', 'days', 'hours', 'minutes', 'seconds'], function(value, key) {
-                    if ('interval_' + value) {
-                        if (trigger) {
-                            trigger = trigger + ' ';
+                    var int_val = item['interval_' + value];
+                    if (int_val && parseInt(int_val)) {
+                        var unit = value;
+                        if (int_val == 1) {
+                            unit = unit.slice(0, -1);
                         }
-                        trigger = trigger + ''
+                        pieces.push('' + int_val + ' ' + unit);
                     }
                 });
-                return trigger;
+                text = text + _.join(pieces, ', ');
+                return text;
             }
             return '';
+        },
+        runSchedule: function(id) {
+            var self = this;
+            var data = axios.post('/api/schedules/' + id + '/run').then(function(response) {
+                setTimeout(self.getSchedules, 2500);
+            });
         }
     }
 });
