@@ -7,7 +7,7 @@ Tired of clicking F5 waiting for a change on a web page? Define a list of pages 
 
 # Demo
 
-See [http://ismito.it:3210/](http://ismito.it:3210/) (you can only add \*.wikipedia.org pages, there)
+See [https://ismito.it:3210/](https://ismito.it:3210/) (you can only add \*.wikipedia.org pages, there)
 
 
 ## Install, run, develop and debug
