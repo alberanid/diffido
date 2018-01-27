@@ -200,15 +200,12 @@ var app = new Vue({
 });
 
 </script>
-<style>
+{% end %}
+
+{% block style %}
 
 body {
-    background-color: white;
-    padding: 12px 20px 12px 20px;
-}
-
-.md-table {
-    height: 80%;
+    padding: 12px 20px 12px 20px !important;
 }
 
 .home-icon {
@@ -223,5 +220,4 @@ body {
     min-height: 350px;
 }
 
-</style>
 {% end %}

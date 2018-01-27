@@ -11,8 +11,49 @@
         <script src="/static/js/vue-material.min.js"></script>
         <script src="/static/js/axios.min.js"></script>
         {% block head %}{% end %}
+        <style>
+body {
+    background-color: white;
+    padding: 6px;
+}
+
+.md-table {
+    height: 80%;
+}
+
+#footer {
+    text-align: center;
+    color: white;
+    display: block;
+    vertical-align: middle;
+    min-height: 16px;
+    left: 0px;
+    right: 0px;
+    bottom: 0px;
+    position: absolute;
+    background-color: #448aff54;
+}
+
+#footer, #footer a {
+    color: rgba(0, 0, 0, .40);
+    transition: color 0.5s ease;
+}
+
+#footer:hover, #footer:hover a {
+    color: rgba(0, 0, 0, .87);
+}
+
+#footer:hover a {
+    text-decoration: underline;
+}
+
+{% block style %}{% end %}
+        </style>
     </head>
     <body>
         {% block body %}{% end %}
+        <md-toolbar md-elevation="0" id="footer">
+            footer
+        </md-toolbar>
     </body>
 </html>
