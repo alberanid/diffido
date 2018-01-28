@@ -17,7 +17,6 @@ limitations under the License.
 
 import os
 import re
-import io
 import json
 import pytz
 import shutil
@@ -144,16 +143,16 @@ def select_xpath(content, xpath):
     :type xpath: str
     :returns: the selected document
     :rtype: str"""
-    fd = io.StringIO(content)
-    tree = etree.parse(fd)
+    tree = etree.HTML(content)
     elems = tree.xpath(xpath)
     if not elems:
         return content
     selected_content = []
     for elem in elems:
-        selected_content.append(''.join([elem.text] + [ElementTree.tostring(e).decode('utf-8', 'replace')
-                                                    for e in elem.getchildren()]))
-    content = ''.join(selected_content)
+        selected_content.append(''.join([elem.text] +
+                                        [ElementTree.tostring(e, method='html').decode('utf-8', 'replace')
+                                         for e in elem.getchildren()]))
+    content = ''.join(selected_content).strip()
     return content
 
 
