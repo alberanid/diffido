@@ -20,24 +20,42 @@
                 <md-card-content>
                     <md-table id="schedules-table" v-model="schedules">
                         <md-table-row slot="md-table-row" slot-scope="{item}">
-                            <md-table-cell md-label="#" md-sort-by="id" md-numeric><a :href="'/schedule.html?id=' + item.id">${ item.id }</a></md-table-cell>
+                            <md-table-cell md-label="#" md-sort-by="id" md-numeric>
+                                <a :href="'/schedule.html?id=' + item.id">${ item.id }</a>
+                            </md-table-cell>
                             <md-table-cell md-label="enabled" md-sort-by="enabled">
                                 <md-icon v-if="item.enabled">check_box</md-icon>
                                 <md-icon v-if="!item.enabled">check_box_outline_blank</md-icon>
                             </md-table-cell>
-                            <md-table-cell md-label="title" md-sort-by="title"><a :href="'/schedule.html?id=' + item.id">${ item.title }</a></md-table-cell>
-                            <md-table-cell md-label="url" md-sort-by="url"><a :href="item.url" target="_new">${ item.url }</a></md-table-cell>
-                            <md-table-cell md-label="trigger" md-sort-by="trigger">${ triggerString(item) }</md-table-cell>
-                            <md-table-cell md-label="last check" md-sort-by="last_history">${ item.last_history && item.last_history.message }</md-table-cell>
-                            <md-table-cell md-label="history">
-                                <md-button :href="'/history.html?id=' + item.id" class="md-icon-button md-primary">
-                                    <md-icon>history</md-icon>
-                                </md-button>
+                            <md-table-cell md-label="schedule" md-sort-by="schedule">
+                                <a :href="'/schedule.html?id=' + item.id"><strong>${ item.title }</strong></a>
+                                <br />
+                                <span>
+                                    <md-icon>link</md-icon>
+                                    <a :href="item.url" target="_new">${ prettifyLink(item) }</a>
+                                    <md-tooltip md-direction="bottom">${ item.url }</md-tooltip>
+                                </span>
                             </md-table-cell>
-                            <md-table-cell md-label="run now">
-                                <md-button class="md-icon-button md-primary" @click="runSchedule(item.id)">
-                                    <md-icon>play_circle_outline</md-icon>
-                                </md-button>
+                            <md-table-cell md-label="trigger" md-sort-by="trigger">
+                                ${ triggerString(item) }
+                                <br />
+                                last check: ${ prettifyLastCheck(item) }
+                            </md-table-cell>
+                            <md-table-cell md-label="actions" class="table-cell-left">
+                                <div class="md-layout md-alignment-top-left">
+                                    <div class="md-layout-item md-medium-size-10 md-small-size-50">
+                                        <md-button :href="'/history.html?id=' + item.id" class="md-icon-button md-primary md-dense" :md-ripple="false">
+                                            <md-icon>history</md-icon>
+                                            <md-tooltip md-direction="bottom">show history</md-tooltip>
+                                        </md-button>
+                                    </div>
+                                    <div class="md-layout-item md-medium-size-10 md-small-size-50">
+                                        <md-button class="md-icon-button md-primary md-dense" @click="runSchedule(item.id)" :md-ripple="false">
+                                            <md-icon>play_circle_outline</md-icon>
+                                            <md-tooltip md-direction="bottom">run now</md-tooltip>
+                                        </md-button>
+                                    </div>
+                                </div>
                             </md-table-cell>
                         </md-table-row>
                     </md-table>
@@ -72,6 +90,20 @@ var app = new Vue({
                 self.schedules = schedules;
             });
         },
+        prettifyLink: function(item) {
+            var link = item.url;
+            if (!link) {
+                return '';
+            }
+            if (link.length > 40) {
+                link = link.substring(0, 40) + "\u2026";
+            }
+            return link;
+        },
+        prettifyLastCheck: function(item) {
+            var last = item.last_history && item.last_history.message;
+            return last.substring(0, last.indexOf('.'));
+        },
         triggerString: function(item) {
             if (item.trigger == 'cron') {
                 return 'cron: ' + item.cron_crontab;
@@ -104,4 +136,11 @@ var app = new Vue({
 });
 
 </script>
+{% end %}
+{% block style %}
+
+.table-cell-left > .md-table-cell-container {
+    padding-left: 12px;
+}
+
 {% end %}
