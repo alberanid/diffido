@@ -25,13 +25,25 @@
                         </md-table-toolbar>
                         <md-table-row slot="md-table-row" slot-scope="{item}">
                             <md-table-cell>
-                                (<a v-if="item.seq > 1" :href="'/diff.html?id=' + id + '&oldid=' + item.id + '&diff=' + last_id">cur</a><span v-if="item.seq == 1">cur</span> | <a :href="'/diff.html?id=' + id + '&diff=' + item.id">prev</a>)
-                                <md-radio name="oldid" v-model="oldid" :value="item.id" v-if="item.seq > 1" :seq="item.seq"></md-radio><span class="placeholder" v-if="item.seq == 1"></span>
-                                <md-radio name="diff" v-model="diff" :value="item.id" :seq="item.seq"></md-radio>
+                                <div class="md-layout md-alignment-center-center">
+                                    <div class="md-layout-item">
+                                        (<a v-if="item.seq > 1" :href="'/diff.html?id=' + id + '&oldid=' + item.id + '&diff=' + last_id">cur</a><span v-if="item.seq == 1">cur</span>&nbsp;|&nbsp;<a :href="'/diff.html?id=' + id + '&diff=' + item.id">prev</a>)&nbsp;
+                                    </div>
+                                    <div class="md-layout-item">
+                                        <md-radio name="oldid" v-model="oldid" :value="item.id" v-if="item.seq > 1" :seq="item.seq"></md-radio><span class="placeholder" v-if="item.seq == 1"></span>
+                                    </div>
+                                    <div class="md-layout-item">
+                                        <md-radio name="diff" v-model="diff" :value="item.id" :seq="item.seq"></md-radio>
+                                    </div>
+                                </div>
                             </md-table-cell>
-                            <md-table-cell md-label="commit ID" md-sort-by="id">${ item.id }</md-table-cell>
-                            <md-table-cell md-label="message" md-sort-by="message">${ item.message }</md-table-cell>
-                            <md-table-cell md-label="changes" md-sort-by="message">+${ item.insertions || 0 },-${ item.deletions || 0 }</md-table-cell>
+                            <md-table-cell md-label="info" md-sort-by="id">
+                                Commit: <strong>${ prettifyCommitID(item) }</strong>
+                                <md-tooltip md-direction="bottom">${ item.id }</md-tooltip>
+                                <br />
+                                Changes: +${ item.insertions || 0 },-${ item.deletions || 0 }
+                            </md-table-cell>
+                            <md-table-cell md-label="date" md-sort-by="date">${ prettifyDate(item.message) }</md-table-cell>
                         </md-table-row>
                     </md-table>
                 </md-card-content>
@@ -73,6 +85,13 @@ var app = new Vue({
                 self.schedule = response.data.schedule;
                 self.last_id = response.data.last_id;
             });
+        },
+        prettifyCommitID: function(item) {
+            var cid = item.id || '';
+            return cid.substring(0, 7);
+        },
+        prettifyDate: function(date) {
+            return date.substring(0, date.indexOf('.'));
         },
         updateFilter: function() {
             if (this.show_empty) {
