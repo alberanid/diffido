@@ -91,6 +91,9 @@ var app = new Vue({
             return cid.substring(0, 7);
         },
         prettifyDate: function(date) {
+            if (!date) {
+                return '';
+            }
             return date.substring(0, date.indexOf('.'));
         },
         updateFilter: function() {

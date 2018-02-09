@@ -101,7 +101,7 @@ var app = new Vue({
             return link;
         },
         prettifyLastCheck: function(item) {
-            var last = item.last_history && item.last_history.message;
+            var last = (item.last_history && item.last_history.message) || '';
             return last.substring(0, last.indexOf('.'));
         },
         triggerString: function(item) {
