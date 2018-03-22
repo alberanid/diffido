@@ -149,9 +149,17 @@ def select_xpath(content, xpath):
         return content
     selected_content = []
     for elem in elems:
-        selected_content.append(''.join([elem.text] +
-                                        [ElementTree.tostring(e, method='html').decode('utf-8', 'replace')
-                                         for e in elem.getchildren()]))
+        pieces = []
+        if elem.text:
+            pieces.append(elem.text)
+        for sub_el in elem.getchildren():
+            try:
+                sub_el_text = ElementTree.tostring(sub_el, method='html').decode('utf-8', 'replace')
+            except:
+                continue
+            if sub_el_text:
+                pieces.append(sub_el_text)
+        selected_content.append(''.join(pieces))
     content = ''.join(selected_content).strip()
     return content
 
