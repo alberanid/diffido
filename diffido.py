@@ -196,7 +196,17 @@ def run_job(id_=None, force=False, *args, **kwargs):
     req_path = urllib.parse.urlparse(req.url).path
     base_name = os.path.basename(req_path) or 'index.html'
     def _commit(id_, filename, content, queue):
-        os.chdir('storage/%s' % id_)
+        try:
+            os.chdir('storage/%s' % id_)
+        except Exception as e:
+            logger.info('unable to move to storage/%s directory: %s; trying to create it...' % (id_, e))
+            _created = False
+            try:
+                _created = git_create_repo(id_)
+            except Exception as e:
+                logger.info('unable to move to storage/%s directory: %s; unable to create it' % (id_, e))
+            if not _created:
+                return False
         current_lines = 0
         if os.path.isfile(filename):
             with open(filename, 'r') as fd:
@@ -328,7 +338,8 @@ def get_history(id_, limit=None, add_info=False):
     def _history(id_, limit, queue):
         try:
             os.chdir('storage/%s' % id_)
-        except:
+        except Exception as e:
+            logger.info('unable to move to storage/%s directory: %s' % (id_, e))
             return queue.put(b'')
         cmd = [GIT_CMD, 'log', '--pretty=oneline', '--shortstat']
         if limit is not None:
@@ -383,7 +394,11 @@ def get_diff(id_, commit_id='HEAD', old_commit_id=None):
     :returns: information about the schedule and the diff between commits
     :rtype: dict"""
     def _history(id_, commit_id, old_commit_id, queue):
-        os.chdir('storage/%s' % id_)
+        try:
+            os.chdir('storage/%s' % id_)
+        except Exception as e:
+            logger.info('unable to move to storage/%s directory: %s' % (id_, e))
+            return queue.put(b'')
         p = subprocess.Popen([GIT_CMD, 'diff', old_commit_id or '%s~' % commit_id, commit_id],
                              stdout=subprocess.PIPE)
         stdout, _ = p.communicate()
