@@ -5,11 +5,6 @@ Spot the difference on the web.
 Tired of clicking F5 waiting for a change on a web page? Define a list of pages to watch, and receive an email when something has changed.
 
 
-# Demo
-
-See [https://ismito.it:3210/](https://ismito.it:3210/) (you can only add \*.wikipedia.org pages, there)
-
-
 ## Install, run, develop and debug
 
 ## Docker
