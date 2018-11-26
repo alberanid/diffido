@@ -22,6 +22,8 @@ wget https://bootstrap.pypa.io/get-pip.py
 sudo python3 get-pip.py
 # if you want to install these modules for an unprivileged user, add --user and remove "sudo";
 # if you want to upgrade the versions already present in the system, also add --upgrade
+sudo pip3 install lxml
+sudo pip3 install pytz
 sudo pip3 install apscheduler
 sudo pip3 install requests
 sudo pip3 install sqlalchemy
