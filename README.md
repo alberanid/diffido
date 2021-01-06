@@ -66,7 +66,7 @@ See the *docs/DEVELOPMENT.md* file for more information about how to contribute.
 
 # License and copyright
 
-Copyright 2018 Davide Alberani <da@erlug.linux.it>
+Copyright 2018-2021 Davide Alberani <da@erlug.linux.it>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
