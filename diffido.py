@@ -295,9 +295,11 @@ def send_email(to, subject='diffido', body='', from_=None):
     msg['To'] = to
     starttls = SMTP_SETTINGS.get('smtp-starttls')
     use_ssl = SMTP_SETTINGS.get('smtp-use-ssl')
+    username = SMTP_SETTINGS.get('smtp-username')
+    password = SMTP_SETTINGS.get('smtp-password')
     args = {}
     for key, value in SMTP_SETTINGS.items():
-        if key in ('smtp-starttls', 'smtp-use-ssl'):
+        if key in ('smtp-starttls', 'smtp-use-ssl', 'smtp-username', 'smtp-password'):
             continue
         if key in ('smtp-port'):
             value = int(value)
@@ -306,8 +308,8 @@ def send_email(to, subject='diffido', body='', from_=None):
     try:
         if use_ssl:
             with smtplib.SMTP_SSL(**args) as s:
-                if args.get('username'):
-                    s.login(args.get('username', ''), args.get('password', ''))
+                if username:
+                    s.login(username, password)
                 s.send_message(msg)
         else:
             tls_args = {}
@@ -320,7 +322,7 @@ def send_email(to, subject='diffido', body='', from_=None):
                     s.starttls(**tls_args)
                     s.ehlo_or_helo_if_needed()
                 if args.get('username'):
-                    s.login(args.get('username', ''), args.get('password', ''))
+                    s.login(username, password)
                 s.send_message(msg)
     except Exception as e:
         logger.error('unable to send email to %s: %s' % (to, e))
@@ -720,8 +722,8 @@ def serve():
     define('smtp-ssl-keyfile', default=None, help='SMTP SSL key file', type=str)
     define('smtp-ssl-certfile', default=None, help='SMTP SSL cert file', type=str)
     define('smtp-ssl-context', default=None, help='SMTP SSL context', type=str)
-    define('smtp-username', default=None, help='SMTP username', type=str)
-    define('smtp-password', default=None, help='SMTP password', type=str)
+    define('smtp-username', default='', help='SMTP username', type=str)
+    define('smtp-password', default='', help='SMTP password', type=str)
     define('debug', default=False, help='run in debug mode', type=bool)
     define('config', help='read configuration file',
             callback=lambda path: tornado.options.parse_config_file(path, final=False))
