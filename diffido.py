@@ -313,7 +313,7 @@ def send_email(to, subject='diffido', body='', from_=None):
             tls_args = {}
             for key in ('ssl_keyfile', 'ssl_certfile', 'ssl_context'):
                 if key in args:
-                    tls_args[key] = args[key].replace('ssl_', '')
+                    tls_args[key] = (args[key] or '').replace('ssl_', '')
                     del args[key]
             with smtplib.SMTP(**args) as s:
                 if starttls:
