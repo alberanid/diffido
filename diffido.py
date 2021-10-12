@@ -23,6 +23,7 @@ import shutil
 import urllib
 import smtplib
 from email.mime.text import MIMEText
+from email.utils import formatdate
 import logging
 import datetime
 import requests
@@ -293,6 +294,7 @@ def send_email(to, subject='diffido', body='', from_=None):
     msg['Subject'] = subject
     msg['From'] = from_ or EMAIL_FROM
     msg['To'] = to
+    msg["Date"] = formatdate(localtime=True)
     starttls = SMTP_SETTINGS.get('smtp-starttls')
     use_ssl = SMTP_SETTINGS.get('smtp-use-ssl')
     username = SMTP_SETTINGS.get('smtp-username')
@@ -307,8 +309,10 @@ def send_email(to, subject='diffido', body='', from_=None):
         args[key] = value
     try:
         if use_ssl:
+            logger.debug('STMP SSL connection with args: %s' % repr(args))
             with smtplib.SMTP_SSL(**args) as s:
                 if username:
+                    logger.debug('STMP LOGIN for username %s and password of length %d' % (username, len(password)))
                     s.login(username, password)
                 s.send_message(msg)
         else:
@@ -317,11 +321,14 @@ def send_email(to, subject='diffido', body='', from_=None):
                 if key in args:
                     tls_args[key.replace('ssl_', '')] = args[key]
                     del args[key]
+            logger.debug('STMP connection with args: %s' % repr(args))
             with smtplib.SMTP(**args) as s:
                 if starttls:
-                    s.starttls(**tls_args)
+                    logger.debug('STMP STARTTLS connection with args: %s' % repr(tls_args))
                     s.ehlo_or_helo_if_needed()
+                    s.starttls(**tls_args)
                 if args.get('username'):
+                    logger.debug('STMP LOGIN for username %s and password of length %d' % (username, len(password)))
                     s.login(username, password)
                 s.send_message(msg)
     except Exception as e:
