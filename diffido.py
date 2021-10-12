@@ -327,7 +327,7 @@ def send_email(to, subject='diffido', body='', from_=None):
                     logger.debug('STMP STARTTLS connection with args: %s' % repr(tls_args))
                     s.ehlo_or_helo_if_needed()
                     s.starttls(**tls_args)
-                if args.get('username'):
+                if username:
                     logger.debug('STMP LOGIN for username %s and password of length %d' % (username, len(password)))
                     s.login(username, password)
                 s.send_message(msg)
