@@ -309,6 +309,10 @@ def send_email(to, subject='diffido', body='', from_=None):
         args[key] = value
     try:
         if use_ssl:
+            for key in ('ssl_keyfile', 'ssl_certfile', 'ssl_context'):
+                if key in args:
+                    args[key.replace('ssl_', '')] = args[key]
+                    del args[key]
             logger.debug('STMP SSL connection with args: %s' % repr(args))
             with smtplib.SMTP_SSL(**args) as s:
                 if username:
