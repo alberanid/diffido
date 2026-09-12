@@ -1,19 +1,17 @@
 FROM alpine
 LABEL \
-	maintainer="Davide Alberani <da@erlug.linux.it>"
+	maintainer="Davide Alberani <da@mimante.net>"
 
 EXPOSE 3210
 
 RUN \
-	apk add --update \
+	apk add --no-cache \
 		git \
+		py3-apscheduler \
 		py3-lxml \
-		py3-pip \
 		py3-requests \
 		py3-sqlalchemy \
-		py3-tornado \
-	&& pip3 install apscheduler \
-	&& rm -rf /var/cache/apk/*
+		py3-tornado
 
 VOLUME /diffido/conf /diffido/storage
 
@@ -24,4 +22,3 @@ COPY ssl /diffido/ssl/
 WORKDIR /diffido/
 
 ENTRYPOINT ["./diffido.py"]
-

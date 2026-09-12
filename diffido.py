@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Diffido - because the F5 key is a terrible thing to waste.
 
-Copyright 2018 Davide Alberani <da@erlug.linux.it>
+Copyright 2018 Davide Alberani <da@mimante.net>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ import re
 import json
 import pytz
 import shutil
-import urllib
 import smtplib
+from urllib.parse import urlparse
 from email.mime.text import MIMEText
 from email.utils import formatdate
 import logging
@@ -53,8 +53,11 @@ EMAIL_FROM = 'diffido@localhost'
 SMTP_SETTINGS = {}
 GIT_CMD = 'git'
 
-re_commit = re.compile(r'^(?P<id>[0-9a-f]{40}) (?P<message>.*)\n(?: .* '
-                       '(?P<insertions>\d+) insertion.* (?P<deletions>\d+) deletion.*$)?', re.M)
+re_commit = re.compile(
+    r'^(?P<id>[0-9a-f]{40}) (?P<message>.*)\n(?: .* '
+    r'(?P<insertions>\d+) insertion.* (?P<deletions>\d+) deletion.*$)?',
+    re.M,
+)
 re_insertion = re.compile(r'(\d+) insertion')
 re_deletion = re.compile(r'(\d+) deletion')
 
@@ -153,10 +156,10 @@ def select_xpath(content, xpath):
         pieces = []
         if elem.text:
             pieces.append(elem.text)
-        for sub_el in elem.getchildren():
+        for sub_el in list(elem):
             try:
                 sub_el_text = ElementTree.tostring(sub_el, method='html').decode('utf-8', 'replace')
-            except:
+            except Exception:
                 continue
             if sub_el_text:
                 pieces.append(sub_el_text)
@@ -193,8 +196,8 @@ def run_job(id_=None, force=False, *args, **kwargs):
         try:
             content = select_xpath(content, xpath)
         except Exception as e:
-            logger.warn('unable to extract XPath %s: %s' % (xpath, e))
-    req_path = urllib.parse.urlparse(req.url).path
+            logger.warning('unable to extract XPath %s: %s' % (xpath, e))
+    req_path = urlparse(req.url).path
     base_name = os.path.basename(req_path) or 'index.html'
     def _commit(id_, filename, content, queue):
         try:
@@ -274,7 +277,10 @@ def safe_run_job(id_=None, *args, **kwargs):
     try:
         run_job(id_, *args, **kwargs)
     except Exception as e:
-        send_email('error executing job %s: %s' % (id_, e))
+        recipient = SMTP_SETTINGS.get('smtp-username') or EMAIL_FROM
+        subject = 'diffido job error'
+        body = 'error executing job %s: %s' % (id_, e)
+        send_email(to=recipient, subject=subject, body=body)
 
 
 def send_email(to, subject='diffido', body='', from_=None):
@@ -440,11 +446,11 @@ def scheduler_update(scheduler, id_):
     :rtype: bool"""
     schedule = get_schedule(id_, add_id=False)
     if not schedule:
-        logger.warn('unable to update empty schedule %s' % id_)
+        logger.warning('unable to update empty schedule %s' % id_)
         return False
     trigger = schedule.get('trigger')
     if trigger not in ('interval', 'cron'):
-        logger.warn('unable to update empty schedule %s: trigger not in ("cron", "interval")' % id_)
+        logger.warning('unable to update empty schedule %s: trigger not in ("cron", "interval")' % id_)
         return False
     args = {}
     if trigger == 'interval':
@@ -458,8 +464,8 @@ def scheduler_update(scheduler, id_):
                     continue
                 args[unit] = int(val)
             except Exception:
-                logger.warn('invalid argument on schedule %s: %s parameter %s is not an integer' %
-                            (id_, 'interval_%s' % unit, schedule['interval_%s' % unit]))
+                logger.warning('invalid argument on schedule %s: %s parameter %s is not an integer' %
+                               (id_, 'interval_%s' % unit, schedule['interval_%s' % unit]))
         if len(args) == 1:
             logger.error('no valid interval specified, skipping schedule %s' % id_)
             return False
@@ -468,14 +474,14 @@ def scheduler_update(scheduler, id_):
             cron_trigger = CronTrigger.from_crontab(schedule['cron_crontab'])
             args['trigger'] = cron_trigger
         except Exception:
-            logger.warn('invalid argument on schedule %s: cron_tab parameter %s is not a valid crontab' %
-                        (id_, schedule.get('cron_crontab')))
+            logger.warning('invalid argument on schedule %s: cron_tab parameter %s is not a valid crontab' %
+                           (id_, schedule.get('cron_crontab')))
             return False
     git_create_repo(id_)
     try:
         scheduler.add_job(safe_run_job, id=id_, replace_existing=True, kwargs={'id_': id_}, **args)
     except Exception as e:
-        logger.warn('unable to update job %s: %s' % (id_, e))
+        logger.warning('unable to update job %s: %s' % (id_, e))
         return False
     return True
 
@@ -492,7 +498,7 @@ def scheduler_delete(scheduler, id_):
     try:
         scheduler.remove_job(job_id=id_)
     except Exception as e:
-        logger.warn('unable to delete job %s: %s' % (id_, e))
+        logger.warning('unable to delete job %s: %s' % (id_, e))
         return False
     return git_delete_repo(id_)
 
@@ -510,16 +516,16 @@ def reset_from_schedules(scheduler):
         for key in read_schedules().get('schedules', {}).keys():
             ret |= scheduler_update(scheduler, id_=key)
     except Exception as e:
-        logger.warn('unable to reset all jobs: %s' % e)
+        logger.warning('unable to reset all jobs: %s' % e)
         return False
     return ret
 
 
 def git_init():
     """Initialize Git global settings"""
-    p = subprocess.Popen([GIT_CMD, 'config', '--global', 'user.email', '"%s"' % EMAIL_FROM])
+    p = subprocess.Popen([GIT_CMD, 'config', '--global', 'user.email', EMAIL_FROM])
     p.communicate()
-    p = subprocess.Popen([GIT_CMD, 'config', '--global', 'user.name', '"Diffido"'])
+    p = subprocess.Popen([GIT_CMD, 'config', '--global', 'user.name', 'Diffido'])
     p.communicate()
 
 
@@ -551,7 +557,7 @@ def git_delete_repo(id_):
     try:
         shutil.rmtree(repo_dir)
     except Exception as e:
-        logger.warn('unable to delete Git repository %s: %s' % (id_, e))
+        logger.warning('unable to delete Git repository %s: %s' % (id_, e))
         return False
     return True
 
