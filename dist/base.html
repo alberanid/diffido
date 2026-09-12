@@ -1,67 +1,21 @@
-<html>
+<!doctype html>
+<html lang="en">
     <head>
         <title>{% block title %}diffido{% end %}</title>
         <meta charset="utf-8">
-        <meta content="width=device-width,initial-scale=1,minimal-ui" name="viewport">
-        <link rel="stylesheet" href="/static/iconfont/material-icons.css">
-        <link rel="stylesheet" href="/static/css/vue-material.min.css">
-        <link rel="stylesheet" href="/static/css/themes/default.css">
-        <script src="/static/js/lodash.min.js"></script>
-        <script src="/static/js/vue.min.js"></script>
-        <script src="/static/js/vue-material.min.js"></script>
-        <script src="/static/js/axios.min.js"></script>
+        <meta content="width=device-width, initial-scale=1" name="viewport">
+        <meta name="color-scheme" content="light">
+        <link rel="stylesheet" href="/static/css/app.css">
         {% block head %}{% end %}
-        <style>
-body {
-    background-color: white;
-    padding: 6px;
-}
-
-#app {
-    margin-bottom: 22px;
-}
-
-.md-table {
-    height: 80%;
-}
-
-#footer {
-    text-align: center;
-    color: white;
-    display: block;
-    vertical-align: middle;
-    min-height: 16px;
-    left: 0px;
-    right: 0px;
-    bottom: 0px;
-    position: absolute;
-    background-color: #448aff54;
-}
-
-#footer, #footer a {
-    color: rgba(0, 0, 0, .40);
-    transition: color 0.5s ease;
-}
-
-#footer:hover, #footer:hover a {
-    color: rgba(0, 0, 0, .87);
-}
-
-#footer:hover a {
-    text-decoration: underline;
-}
-
-.md-card {
-    margin-top: 6px;
-}
-
-{% block style %}{% end %}
-        </style>
+        {% block style %}{% end %}
     </head>
     <body>
+        <main class="page-shell">
         {% block body %}{% end %}
-        <md-toolbar md-elevation="0" id="footer">
-            <span><a href="https://github.com/alberanid/diffido" target="_new">diffido</a> &copy; <a href="http://www.ismito.it/" target="_new">Davide Alberani</a></span>
-        </md-toolbar>
+        </main>
+        <footer>
+            <span><a href="https://github.com/alberanid/diffido" target="_blank" rel="noopener">diffido</a> &copy; <a href="http://www.ismito.it/" target="_blank" rel="noopener">Davide Alberani</a></span>
+        </footer>
+        <script src="/static/js/app.js" defer></script>
     </body>
 </html>

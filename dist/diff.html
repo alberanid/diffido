@@ -1,76 +1,10 @@
 {% extends "base.html" %}
 
-{% block head %}
-        <link rel="stylesheet" href="/static/css/diff2html.min.css">
-        <script src="/static/js/diff2html.min.js"></script>
-{% end %}
-
+{% block title %}Diff · Diffido{% end %}
 {% block body %}
-<div id="app">
-    <div class="md-layout">
-        <div class="md-layout-item">
-            <md-card id="main-card">
-                <md-card-header>
-                    <div class="md-title">
-                        <md-button href="/" class="md-icon-button md-primary">
-                            <md-icon>home</md-icon>
-                        </md-button>
-                        Diffido: ${schedule && schedule.title} diff
-                    </div>
-                </md-card-header>
-
-                <md-card-content id="diffpanel-container">
-                    <div id="diffpanel"></div>
-                </md-card-content>
-            </md-card>
-        </div>
-    </div>
-</div>
-
-<script>
-
-Vue.use(VueMaterial.default);
-
-var app = new Vue({
-    el: '#app',
-    delimiters: ['${', '}'],
-    data: {
-        schedule: {},
-        history: [],
-        difftext: '',
-        id: "{{id}}",
-        {% try %}
-          {% if diff %}
-        diff: "{{diff}}",
-          {% end %}
-        {% except %}
-        diff: null,
-        {% end %}
-        {% try %}
-          {% if oldid %}
-        oldid: "{{oldid}}",
-          {% end %}
-        {% except %}
-        oldid: null,
-        {% end %}
-    },
-    mounted: function() {
-        this.getDiff();
-    },
-    methods: {
-        getDiff: function() {
-            self = this;
-            var data = axios.get('/api/schedules/' + this.id + '/diff/' + this.diff + '/' + (this.oldid || '')).then(function(response) {
-                self.schedule = response.data.schedule;
-                self.difftext = response.data.diff;
-                var current_size = document.getElementById('diffpanel').offsetWidth;
-                var pretty_diff = Diff2Html.getPrettyHtml(self.difftext, {showFiles: true, matching: 'none'});
-                document.getElementById('diffpanel').innerHTML = pretty_diff;
-                document.getElementById('diffpanel').style['max-width'] = (current_size - 20) + 'px';
-            });
-        }
-    }
-});
-
-</script>
+<section class="card" data-page="diff">
+    <header class="page-header"><div><p class="eyebrow">Revision comparison</p><h1>Diff</h1></div><a class="button secondary back-history" href="/">History</a></header>
+    <p class="status" role="status" aria-live="polite"></p>
+    <pre class="diff-output"></pre>
+</section>
 {% end %}
