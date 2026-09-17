@@ -172,6 +172,11 @@
             const data = await api(`schedules/${encodeURIComponent(id)}/diff/${encodeURIComponent(diff)}/${encodeURIComponent(oldid || "")}`);
             page.querySelector("h1").textContent = `${data.schedule.title || "Schedule"} diff`;
             const output = page.querySelector(".diff-output");
+            const notice = page.querySelector(".diff-truncated-notice");
+            if (data.truncated) {
+                notice.textContent = `Output truncated: showing the first ${data.shown_lines} of ${data.total_lines} diff lines.`;
+                notice.hidden = false;
+            }
             const rendered = {};
             const render = mode => {
                 output.innerHTML = rendered[mode] || (rendered[mode] = Diff2Html.getPrettyHtml(data.diff, { outputFormat: mode }));

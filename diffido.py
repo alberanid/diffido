@@ -67,6 +67,9 @@ ERROR_EMAIL_INTERVAL = 24 * 60 * 60
 EMAIL_SUBJECT_PREFIX = 'Subject:'
 SMTP_SETTINGS = {}
 GIT_CMD = 'git'
+# Maximum number of diff lines sent to clients (diff page, notification emails).
+# Large diffs are truncated and flagged, to keep pages and payloads fast.
+MAX_DIFF_LINES = 1000
 
 # Fallback content of the email templates, used when the files are missing
 # or unreadable; the first line is the subject of the email, when prefixed
@@ -736,7 +739,9 @@ def get_diff(id_, commit_id='HEAD', old_commit_id=None):
     :type commit_id: str
     :param old_commit_id: the older commit ID; if None, the previous commit is used
     :type old_commit_id: str
-    :returns: information about the schedule and the diff between commits
+    :returns: information about the schedule and the diff between commits; if the
+              diff is longer than MAX_DIFF_LINES lines, it is truncated and the
+              ``truncated`` flag is set (with ``total_lines`` and ``shown_lines``)
     :rtype: dict"""
     cmd = [GIT_CMD, 'diff', old_commit_id or '%s~' % commit_id, commit_id]
     queue = multiprocessing.Queue()
@@ -749,7 +754,12 @@ def get_diff(id_, commit_id='HEAD', old_commit_id=None):
         message = stderr.decode('utf-8', 'replace').strip() or 'git diff exited with code %s' % returncode
         logger.warning('unable to get diff of %s for schedule %s: %s' % (commit_id, id_, message))
         return {'diff': '', 'error': message, 'schedule': schedule}
-    return {'diff': res.decode('utf-8'), 'schedule': schedule}
+    lines = res.decode('utf-8', 'replace').splitlines()
+    truncated = len(lines) > MAX_DIFF_LINES
+    data = {'diff': '\n'.join(lines[:MAX_DIFF_LINES]), 'schedule': schedule}
+    if truncated:
+        data.update(truncated=True, total_lines=len(lines), shown_lines=MAX_DIFF_LINES)
+    return data
 
 
 def _read_revision(id_, commit_id, queue):
