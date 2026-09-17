@@ -405,13 +405,15 @@ def _run_git_in_dir(id_, cmd, queue):
     queue.put(stdout)
 
 
-def get_history(id_, limit=None, add_info=False):
+def get_history(id_, limit=None, offset=0, add_info=False):
     """Read the history of a schedule
 
     :param id_: ID of the schedule
     :type id_: str
     :param limit: number of entries to fetch
     :type limit: int
+    :param offset: number of entries to skip (used for pagination)
+    :type offset: int
     :param add_info: add information about the schedule itself
     :type add_info: int
     :returns: information about the schedule and its history
@@ -419,6 +421,8 @@ def get_history(id_, limit=None, add_info=False):
     cmd = [GIT_CMD, 'log', '--pretty=oneline', '--shortstat']
     if limit is not None:
         cmd.append('-%s' % limit)
+    if offset:
+        cmd.extend(['--skip', str(offset)])
     queue = multiprocessing.Queue()
     p = multiprocessing.Process(target=_run_git_in_dir, args=(id_, cmd, queue))
     p.start()
@@ -438,8 +442,17 @@ def get_history(id_, limit=None, add_info=False):
     if history and 'id' in history[0]:
         last_id = history[0]['id']
     for idx, item in enumerate(history):
-        item['seq'] = idx + 1
-    data = {'history': history, 'last_id': last_id}
+        item['seq'] = idx + 1 + int(offset or 0)
+    total = 0
+    count_queue = multiprocessing.Queue()
+    p = multiprocessing.Process(target=_run_git_in_dir, args=(id_, [GIT_CMD, 'rev-list', '--count', 'HEAD'], count_queue))
+    p.start()
+    try:
+        total = int(count_queue.get().decode('utf-8').strip() or 0)
+    except (ValueError, UnicodeDecodeError):
+        total = 0
+    p.join()
+    data = {'history': history, 'last_id': last_id, 'total': total}
     if add_info:
         data['schedule'] = get_schedule(id_)
     return data
@@ -676,6 +689,41 @@ def git_delete_repo(id_):
         return False
     return True
 
+DEFAULT_PAGE_SIZE = 20
+
+
+def pagination_params(handler, default=DEFAULT_PAGE_SIZE):
+    """Extract and validate page/page_size arguments from a request.
+
+    :param handler: the request handler
+    :type handler: tornado.web.RequestHandler
+    :param default: default page size
+    :type default: int
+    :returns: (page, page_size) tuple, both positive integers
+    :rtype: tuple"""
+    def _int_arg(name, fallback):
+        try:
+            value = int(handler.get_query_argument(name, fallback))
+        except (TypeError, ValueError):
+            return fallback
+        return max(1, value)
+    return _int_arg('page', 1), _int_arg('page_size', default)
+
+
+def build_pagination(page, page_size, total):
+    """Build a pagination metadata dictionary.
+
+    :param page: current page number (1-based)
+    :type page: int
+    :param page_size: number of items per page
+    :type page_size: int
+    :param total: total number of items
+    :type total: int
+    :returns: pagination metadata
+    :rtype: dict"""
+    pages = (total + page_size - 1) // page_size if total else 0
+    return {'page': page, 'page_size': page_size, 'total': total, 'pages': pages}
+
 
 class DiffidoBaseException(Exception):
     """Base class for diffido custom exceptions.
@@ -746,11 +794,19 @@ class SchedulesHandler(BaseHandler):
     """Schedules handler."""
     @gen.coroutine
     def get(self, id_=None, *args, **kwargs):
-        """Get a schedule."""
+        """Get a schedule (or a paginated list of schedules)."""
         if id_ is not None:
             return self.write({'schedule': get_schedule(id_, add_history=True)})
-        schedules = read_schedules()
-        self.write(schedules)
+        page, page_size = pagination_params(self)
+        schedules = read_schedules().get('schedules', {})
+        keys = sorted(schedules.keys())
+        total = len(keys)
+        start = (page - 1) * page_size
+        selected = {key: schedules[key] for key in keys[start:start + page_size]}
+        for key, value in selected.items():
+            value['id'] = key
+        self.write({'schedules': selected,
+                    'pagination': build_pagination(page, page_size, total)})
 
     @gen.coroutine
     def put(self, id_=None, *args, **kwargs):
@@ -791,7 +847,7 @@ class SchedulesHandler(BaseHandler):
 
 
 class RunScheduleHandler(BaseHandler):
-    """Reset schedules handler."""
+    """Run a schedule handler."""
     @gen.coroutine
     def post(self, id_, *args, **kwargs):
         if run_job(id_, force=True):
@@ -810,8 +866,11 @@ class HistoryHandler(BaseHandler):
     """History handler."""
     @gen.coroutine
     def get(self, id_, *args, **kwargs):
-        self.write(get_history(id_, add_info=True))
-
+        page, page_size = pagination_params(self)
+        offset = (page - 1) * page_size
+        data = get_history(id_, limit=page_size, offset=offset, add_info=True)
+        data['pagination'] = build_pagination(page, page_size, data.get('total', 0))
+        self.write(data)
 
 class DiffHandler(BaseHandler):
     """Diff handler."""

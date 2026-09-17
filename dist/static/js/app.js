@@ -41,21 +41,52 @@
         return pieces.length ? `Every ${pieces.join(", ")}` : "Not configured";
     };
 
+    const renderPagination = (nav, info, onPage) => {
+        const {page = 1, pages = 0, total = 0} = info || {};
+        if (!nav) return;
+        nav.textContent = "";
+        if (!pages || pages <= 1) return;
+        const prev = document.createElement("button");
+        prev.type = "button";
+        prev.className = "button secondary";
+        prev.textContent = "Previous";
+        prev.disabled = page <= 1;
+        const next = document.createElement("button");
+        next.type = "button";
+        next.className = "button secondary";
+        next.textContent = "Next";
+        next.disabled = page >= pages;
+        prev.addEventListener("click", () => onPage(page - 1));
+        next.addEventListener("click", () => onPage(page + 1));
+        const label = document.createElement("span");
+        label.className = "pagination-info";
+        label.textContent = `Page ${page} of ${pages} (${total} total)`;
+        nav.append(prev, label, next);
+    };
+
     const initSchedules = async () => {
         const tbody = page.querySelector("tbody");
-        try {
-            const {schedules = {}} = await api("schedules");
-            const entries = Object.entries(schedules);
-            if (!entries.length) {
-                tbody.innerHTML = '<tr><td colspan="5">No schedules yet. Add one to begin monitoring.</td></tr>';
-                return;
-            }
-            tbody.innerHTML = entries.map(([scheduleId, item]) => `<tr>
-                <td><a href="/schedule.html?id=${encodeURIComponent(scheduleId)}">${escape(item.title || "Untitled")}</a><br><small><a href="${safeUrl(item.url)}" target="_blank" rel="noopener">${escape(item.url || "")}</a></small></td>
-                <td>${scheduleFrequency(item)}</td><td>${date(item.last_history && item.last_history.message)}</td><td>${date(item.last_change && item.last_change.message)}</td>
-                <td class="row-actions"><a class="button secondary" href="/history.html?id=${encodeURIComponent(scheduleId)}" aria-label="History" title="History"><span class="material-icons" aria-hidden="true">history</span></a> <button class="button primary" data-run="${escape(scheduleId)}" aria-label="Run now" title="Run now"><span class="material-icons" aria-hidden="true">play_arrow</span></button> <a class="button secondary" href="/schedule.html?id=${encodeURIComponent(scheduleId)}" aria-label="Edit" title="Edit"><span class="material-icons" aria-hidden="true">edit</span></a></td>
-            </tr>`).join("");
-        } catch (error) { showStatus(error.message, true); }
+        const nav = page.querySelector(".pagination");
+        const current = Math.max(1, Number(params.get("page")) || 1);
+        const pageSize = Math.max(1, Number(params.get("page_size")) || 20);
+        const load = async pageNum => {
+            try {
+                const {schedules = {}, pagination = {}} = await api(`schedules?page=${pageNum}&page_size=${pageSize}`);
+                const entries = Object.entries(schedules);
+                if (!entries.length && !pagination.total) {
+                    tbody.innerHTML = '<tr><td colspan="5">No schedules yet. Add one to begin monitoring.</td></tr>';
+                    renderPagination(nav, pagination, load);
+                    return;
+                }
+                tbody.innerHTML = entries.map(([scheduleId, item]) => `<tr>
+                    <td><a href="/schedule.html?id=${encodeURIComponent(scheduleId)}">${escape(item.title || "Untitled")}</a><br><small><a href="${safeUrl(item.url)}" target="_blank" rel="noopener">${escape(item.url || "")}</a></small></td>
+                    <td>${scheduleFrequency(item)}</td><td>${date(item.last_history && item.last_history.message)}</td><td>${date(item.last_change && item.last_change.message)}</td>
+                    <td class="row-actions"><a class="button secondary" href="/history.html?id=${encodeURIComponent(scheduleId)}" aria-label="History" title="History"><span class="material-icons" aria-hidden="true">history</span></a> <button class="button primary" data-run="${escape(scheduleId)}" aria-label="Run now" title="Run now"><span class="material-icons" aria-hidden="true">play_arrow</span></button> <a class="button secondary" href="/schedule.html?id=${encodeURIComponent(scheduleId)}" aria-label="Edit" title="Edit"><span class="material-icons" aria-hidden="true">edit</span></a></td>
+                </tr>`).join("");
+                renderPagination(nav, pagination, load);
+            } catch (error) { showStatus(error.message, true); }
+        };
+        await load(current);
         tbody.addEventListener("click", async event => {
             const button = event.target.closest("[data-run]");
             if (!button) return;
@@ -112,16 +143,25 @@
         const heading = page.querySelector("h1");
         const tbody = page.querySelector("tbody");
         const toggle = page.querySelector("[name=show-empty]");
+        const nav = page.querySelector(".pagination");
         if (!id) { showStatus("A schedule ID is required.", true); return; }
-        try {
-            const data = await api(`schedules/${encodeURIComponent(id)}/history`);
-            heading.textContent = `${data.schedule.title || "Schedule"} history`;
-            const render = () => {
-                const entries = toggle.checked ? data.history : data.history.filter(item => item.changes);
-                tbody.innerHTML = entries.length ? entries.map(item => `<tr><td><code>${escape(item.id.slice(0, 7))}</code></td><td>+${item.insertions}, −${item.deletions}</td><td>${date(item.message)}</td><td><a class="button secondary" href="/diff.html?id=${encodeURIComponent(id)}&diff=${encodeURIComponent(item.id)}"><span class="material-icons" aria-hidden="true">find_in_page</span>View diff</a></td><td><a class="button secondary" href="/revision.html?id=${encodeURIComponent(id)}&revision=${encodeURIComponent(item.id)}"><span class="material-icons" aria-hidden="true">description</span>View page</a></td></tr>`).join("") : '<tr><td colspan="5">No matching history entries.</td></tr>';
-            };
-            render(); toggle.addEventListener("change", render);
-        } catch (error) { showStatus(error.message, true); }
+        let currentPage = Math.max(1, Number(params.get("page")) || 1);
+        const pageSize = Math.max(1, Number(params.get("page_size")) || 20);
+        const render = data => {
+            const entries = toggle.checked ? data.history : (data.history || []).filter(item => item.changes);
+            tbody.innerHTML = entries.length ? entries.map(item => `<tr><td><code>${escape(item.id.slice(0, 7))}</code></td><td>+${item.insertions}, −${item.deletions}</td><td>${date(item.message)}</td><td><a class="button secondary" href="/diff.html?id=${encodeURIComponent(id)}&diff=${encodeURIComponent(item.id)}"><span class="material-icons" aria-hidden="true">find_in_page</span>View diff</a></td><td><a class="button secondary" href="/revision.html?id=${encodeURIComponent(id)}&revision=${encodeURIComponent(item.id)}"><span class="material-icons" aria-hidden="true">description</span>View page</a></td></tr>`).join("") : '<tr><td colspan="5">No matching history entries.</td></tr>';
+            renderPagination(nav, data.pagination, load);
+        };
+        const load = async pageNum => {
+            try {
+                const data = await api(`schedules/${encodeURIComponent(id)}/history?page=${pageNum}&page_size=${pageSize}`);
+                heading.textContent = `${data.schedule.title || "Schedule"} history`;
+                currentPage = pageNum;
+                render(data);
+            } catch (error) { showStatus(error.message, true); }
+        };
+        await load(currentPage);
+        toggle.addEventListener("change", () => load(currentPage));
     };
 
     const initDiff = async () => {

@@ -27,6 +27,9 @@ h1 { margin: 0; font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -.03em; }
 .row-actions .button { padding-left: 9px; padding-right: 9px; }
 .status { min-height: 1.25rem; margin: 0 0 16px; color: var(--muted); } .status.error { color: var(--danger); }
 .table-wrap { overflow-x: auto; }
+.pagination { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+.pagination:empty { display: none; }
+.pagination-info { color: var(--muted); font-size: .85rem; }
 table { width: 100%; border-collapse: collapse; } th, td { padding: 14px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; } th { color: var(--muted); font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; } td:last-child { white-space: nowrap; }
 .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
 .form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
