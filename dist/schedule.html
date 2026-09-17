@@ -27,16 +27,16 @@
         </div>
         <label class="cron-field">Crontab<input name="cron_crontab" placeholder="*/5 * * * *" autocomplete="off"></label>
     </fieldset>
-    <fieldset><legend>HTTP request</legend>
-        <label>Method<select name="http_method"><option value="GET" selected>GET</option><option value="POST">POST</option><option value="PUT">PUT</option><option value="DELETE">DELETE</option><option value="OPTIONS">OPTIONS</option></select></label>
-        <label>Authentication<select name="auth_type"><option value="">None</option><option value="basic">Basic</option><option value="digest">Digest</option><option value="bearer">Bearer token</option></select></label>
+    <fieldset><legend class="http-legend">HTTP request</legend>
+        <label class="http-only">Method<select name="http_method"><option value="GET" selected>GET</option><option value="POST">POST</option><option value="PUT">PUT</option><option value="DELETE">DELETE</option><option value="OPTIONS">OPTIONS</option></select></label>
+        <label class="http-only">Authentication<select name="auth_type"><option value="">None</option><option value="basic">Basic</option><option value="digest">Digest</option><option value="bearer">Bearer token</option></select></label>
         <div class="auth-cred-fields form-grid">
             <label>Username<input name="auth_username" autocomplete="off"></label>
             <label>Password<input name="auth_password" autocomplete="off"></label>
         </div>
         <label class="auth-token-field">Bearer token<input name="auth_token" autocomplete="off"></label>
-        <label>Custom headers<textarea name="custom_headers" rows="3" placeholder="X-Api-Key: secret" autocomplete="off"></textarea></label>
-        <label>Cookies<input name="cookies" placeholder="name=value; other=value" autocomplete="off"></label>
+        <label class="http-only">Custom headers<textarea name="custom_headers" rows="3" placeholder="X-Api-Key: secret" autocomplete="off"></textarea></label>
+        <label class="http-only">Cookies<input name="cookies" placeholder="name=value; other=value" autocomplete="off"></label>
         <div class="body-fields form-grid">
             <label>Request body<textarea name="request_body" rows="3" autocomplete="off"></textarea></label>
             <label>Content type<input name="body_content_type" placeholder="application/json" autocomplete="off"></label>

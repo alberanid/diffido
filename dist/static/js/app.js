@@ -110,11 +110,16 @@
         const authCredFields = form.querySelector(".auth-cred-fields");
         const authTokenField = form.querySelector(".auth-token-field");
         const bodyFields = form.querySelector(".body-fields");
+        const httpLegend = form.querySelector(".http-legend");
+        const httpOnlyFields = Array.from(form.querySelectorAll(".http-only"));
         const updateHttpFields = () => {
             const authType = input("auth_type").value;
-            authCredFields.hidden = !(authType === "basic" || authType === "digest");
-            authTokenField.hidden = authType !== "bearer";
-            bodyFields.hidden = input("http_method").value === "GET";
+            const isFtp = ["ftp", "ftps"].includes((input("url").value.split(":", 1)[0] || "").toLowerCase());
+            httpOnlyFields.forEach(el => { el.hidden = isFtp; });
+            httpLegend.textContent = isFtp ? "FTP credentials" : "HTTP request";
+            authCredFields.hidden = !((authType === "basic" || authType === "digest") || isFtp);
+            authTokenField.hidden = authType !== "bearer" || isFtp;
+            bodyFields.hidden = input("http_method").value === "GET" || isFtp;
         };
         const populate = schedule => Object.entries(schedule).forEach(([key, value]) => {
             const field = input(key);
@@ -132,6 +137,7 @@
         input("trigger").addEventListener("change", updateTrigger);
         input("http_method").addEventListener("change", updateHttpFields);
         input("auth_type").addEventListener("change", updateHttpFields);
+        input("url").addEventListener("input", updateHttpFields);
         form.addEventListener("submit", async event => {
             event.preventDefault();
             if (!form.reportValidity()) return;

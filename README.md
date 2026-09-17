@@ -58,6 +58,8 @@ Each schedule can also customize the HTTP request used to fetch the page:
 - **Cookies**: static cookies, as `name=value` pairs separated by semicolons (for example `session=xyz`); useful to fetch pages that require a logged-in session (copy the cookies from your browser). Automatic login with credentials is not supported.
 - **Request body** and **Content type**: body sent with non-GET requests; when a body is set but no content type is, `application/x-www-form-urlencoded` is used.
 
+FTP and FTPS URLs are supported too: a schedule whose URL uses the `ftp://` or `ftps://` scheme is fetched with the FTP protocol instead of HTTP (`ftps` uses an explicit TLS connection; default ports are 21 and 990, unless the URL specifies one). The *Username* and *Password* fields are used to log in to the server; when they are left empty, credentials embedded in the URL (`ftp://user:password@host/path`) are used; when neither is present, an anonymous login is performed announcing *admin-email* as the password. A URL ending with `/`, or one that turns out to point to a directory rather than a file, fetches and stores the directory listing (as *listing.txt*), so that diffido reports new, removed or changed files; any other URL is fetched as a file. The HTTP-specific options above (method, custom headers, cookies and body) are ignored for FTP schedules, and hidden in the schedule form.
+
 Credentials are stored in plaintext in *conf/schedules.json* (which is gitignored): treat that file accordingly. Note that wrong credentials are not reported as job failures: the server's error or login page is fetched and diffed like any other page, which will surface as (unwanted) changes.
 
 

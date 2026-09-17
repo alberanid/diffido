@@ -21,8 +21,9 @@ import json
 import pytz
 import shutil
 import smtplib
+import ftplib
 from string import Template
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -321,6 +322,72 @@ def request_options(schedule):
     return {'method': method, 'headers': headers, 'auth': auth, 'cookies': cookies, 'data': data}
 
 
+def ftp_fetch(url, schedule):
+    """Fetch a file, or a directory listing, from an FTP or FTPS server.
+
+    The URL scheme selects the transport: `ftp` uses a plain connection
+    (default port 21), `ftps` an explicit TLS connection (default port 990)
+    with a protected (encrypted) data channel.  Credentials are taken from
+    the `auth_username` and `auth_password` schedule options; when both are
+    missing, the URL userinfo (`ftp://user:password@host/path`) is used; when
+    that is missing too, an anonymous login is performed with `EMAIL_FROM` as
+    password.  `auth_type` and the other HTTP-specific options are ignored.
+    Transfers run in passive mode (the ftplib default) with a 30-seconds
+    socket timeout.
+
+    :param url: the FTP or FTPS URL to fetch
+    :type url: str
+    :param schedule: the schedule definition
+    :type schedule: dict
+    :returns: tuple with the content of the file (or of the `LIST` directory
+        listing, when the path ends with `/` or refers to a directory) and
+        the name of the file where it must be stored
+    :rtype: tuple
+    :raises ValueError: when the URL has no host"""
+    parsed = urlparse(url)
+    scheme = parsed.scheme.lower()
+    if not parsed.hostname:
+        raise ValueError('invalid FTP URL %r: missing host' % url)
+    port = parsed.port or (990 if scheme == 'ftps' else 21)
+    username = schedule.get('auth_username')
+    password = schedule.get('auth_password')
+    if not (username or password):
+        username, password = parsed.username, parsed.password
+    if not (username or password):
+        username, password = 'anonymous', EMAIL_FROM
+    username = unquote(username or 'anonymous')
+    password = unquote(password or '')
+    path = unquote(parsed.path or '/') or '/'
+    client = ftplib.FTP_TLS if scheme == 'ftps' else ftplib.FTP
+    ftp = client(timeout=30)
+    try:
+        ftp.connect(parsed.hostname, port, timeout=30)
+        ftp.login(username, password)
+        if scheme == 'ftps':
+            ftp.prot_p()
+
+        def _list_dir():
+            ftp.cwd(path)
+            lines = []
+            ftp.dir(lines.append)
+            return '\n'.join(lines), 'listing.txt'
+
+        if path.endswith('/'):
+            return _list_dir()
+        chunks = []
+        try:
+            ftp.retrbinary('RETR %s' % path, chunks.append)
+        except ftplib.error_perm as e:
+            logger.info('unable to retrieve %s: %s; fetching directory listing' % (path, e))
+            return _list_dir()
+        return b''.join(chunks).decode('utf-8', 'replace'), os.path.basename(path) or 'index.html'
+    finally:
+        try:
+            ftp.quit()
+        except Exception:
+            ftp.close()
+
+
 def _commit_job(id_, filename, content, queue):
     """Store the fetched content and commit it.
 
@@ -346,6 +413,11 @@ def _commit_job(id_, filename, content, queue):
         except Exception as e:
             logger.info('unable to move to storage/%s directory: %s; unable to create it' % (id_, e))
         if not _created:
+            return queue.put({})
+        try:
+            os.chdir('storage/%s' % id_)
+        except Exception as e:
+            logger.warning('unable to move to storage/%s directory: %s; unable to enter it after creation' % (id_, e))
             return queue.put({})
     current_lines = 0
     if os.path.isfile(filename):
@@ -395,19 +467,21 @@ def run_job(id_=None, force=False, *args, **kwargs):
     if not schedule.get('enabled') and not force:
         logger.info('not running job %s: disabled' % id_)
         return True
-    opts = request_options(schedule)
-    req = requests.request(opts['method'], url, headers=opts['headers'], auth=opts['auth'],
-                           cookies=opts['cookies'], data=opts['data'],
-                           allow_redirects=True, timeout=(30.10, 240))
-    content = req.text
+    if urlparse(url).scheme.lower() in ('ftp', 'ftps'):
+        content, base_name = ftp_fetch(url, schedule)
+    else:
+        opts = request_options(schedule)
+        req = requests.request(opts['method'], url, headers=opts['headers'], auth=opts['auth'],
+                               cookies=opts['cookies'], data=opts['data'],
+                               allow_redirects=True, timeout=(30.10, 240))
+        content = req.text
+        base_name = os.path.basename(urlparse(req.url).path) or 'index.html'
     xpath = schedule.get('xpath')
     if xpath:
         try:
             content = select_xpath(content, xpath)
         except Exception as e:
             logger.warning('unable to extract XPath %s: %s' % (xpath, e))
-    req_path = urlparse(req.url).path
-    base_name = os.path.basename(req_path) or 'index.html'
     queue = multiprocessing.Queue()
     p = multiprocessing.Process(target=_commit_job, args=(id_, base_name, content, queue))
     p.start()
@@ -993,6 +1067,7 @@ def scheduler_update(scheduler, id_):
     if not schedule:
         logger.warning('unable to update empty schedule %s' % id_)
         return False
+    git_create_repo(id_)
     trigger = schedule.get('trigger')
     if trigger not in ('interval', 'cron'):
         logger.warning('unable to update empty schedule %s: trigger not in ("cron", "interval")' % id_)
@@ -1022,7 +1097,6 @@ def scheduler_update(scheduler, id_):
             logger.warning('invalid argument on schedule %s: cron_tab parameter %s is not a valid crontab' %
                            (id_, schedule.get('cron_crontab')))
             return False
-    git_create_repo(id_)
     try:
         scheduler.add_job(safe_run_job, id=id_, replace_existing=True, kwargs={'id_': id_}, **args)
     except Exception as e:
