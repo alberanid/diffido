@@ -55,6 +55,8 @@ Each schedule has its own web page GUI; the settings should be pretty self-expla
 
 When a watched page changes (and the change is above the configured *minimum change*), Diffido sends an email to the address configured for the schedule. The message body reports the schedule ID and title, the monitored URL, the number of insertions and deletions, the Git revisions involved and the date of the change; the unified diff is sent as a `.diff` attachment instead of being embedded in the body. Errors encountered while running a job are reported to the *admin_email* address (or to the configured SMTP username).
 
+To avoid flooding the administrator, an error email is sent only the first time a given error occurs: identical errors from the same schedule are skipped, until either the error changes, the job succeeds again, or the same error has persisted for more than *error_email_interval* seconds (default: 86400, i.e. one day; set it to 0 to never resend the same error). The last notified errors are remembered in *conf/error_state.json*.
+
 
 ## Email templates
 

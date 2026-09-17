@@ -32,6 +32,7 @@ import logging
 import datetime
 import requests
 import subprocess
+import time
 import multiprocessing
 from lxml import etree
 from xml.etree import ElementTree
@@ -60,6 +61,8 @@ DEFAULT_EMAIL_TEMPLATE = 'conf/email_template.txt'
 DEFAULT_EMAIL_ERROR_TEMPLATE = 'conf/email_error_template.txt'
 EMAIL_TEMPLATE = DEFAULT_EMAIL_TEMPLATE
 EMAIL_ERROR_TEMPLATE = DEFAULT_EMAIL_ERROR_TEMPLATE
+ERROR_STATE_FILE = 'conf/error_state.json'
+ERROR_EMAIL_INTERVAL = 24 * 60 * 60
 EMAIL_SUBJECT_PREFIX = 'Subject:'
 SMTP_SETTINGS = {}
 GIT_CMD = 'git'
@@ -425,6 +428,82 @@ def build_change_email(id_, schedule, result, revision=None, old_revision=None):
     return render_email_template(template, context, '$title page changed')
 
 
+def read_error_state():
+    """Return the state of the error notifications already sent.
+
+    :returns: dictionary mapping schedule IDs to their last error notice
+    :rtype: dict"""
+    if not os.path.isfile(ERROR_STATE_FILE):
+        return {}
+    try:
+        with open(ERROR_STATE_FILE, 'r') as fd:
+            return json.loads(fd.read())
+    except Exception as e:
+        logger.error('unable to read %s: %s' % (ERROR_STATE_FILE, e))
+        return {}
+
+
+def write_error_state(state):
+    """Save the state of the error notifications already sent.
+
+    :param state: dictionary mapping schedule IDs to their last error notice
+    :type state: dict
+    :returns: True in case of success
+    :rtype: bool"""
+    try:
+        with open(ERROR_STATE_FILE, 'w') as fd:
+            fd.write(json.dumps(state, indent=2))
+    except Exception as e:
+        logger.error('unable to write %s: %s' % (ERROR_STATE_FILE, e))
+        return False
+    return True
+
+
+def reset_error_state(id_):
+    """Forget the last error notice sent for a schedule.
+
+    Called when a job runs successfully, so that a later failure is
+    notified again even if identical to a previous one.
+
+    :param id_: ID of the schedule
+    :type id_: str"""
+    state = read_error_state()
+    if id_ not in state:
+        return
+    del state[id_]
+    write_error_state(state)
+
+
+def should_notify_error(id_, error):
+    """Record an error and decide whether an email must be sent.
+
+    A notice is sent when the error is different from the last one
+    notified for the schedule, or when the same error persists for more
+    than ERROR_EMAIL_INTERVAL seconds; identical, recent errors are
+    silently skipped to avoid flooding the administrator.
+
+    :param id_: ID of the schedule
+    :type id_: str
+    :param error: signature of the error (type and message)
+    :type error: str
+    :returns: True when an error email must be sent
+    :rtype: bool"""
+    state = read_error_state()
+    now = time.time()
+    previous = state.get(id_)
+    if previous is not None and previous.get('error') == error and \
+            (not ERROR_EMAIL_INTERVAL or now - previous.get('last', 0) < ERROR_EMAIL_INTERVAL):
+        previous['count'] = previous.get('count', 1) + 1
+        state[id_] = previous
+        write_error_state(state)
+        logger.info('skipping error email for job %s: same error already notified (%d times)' %
+                    (id_, previous['count']))
+        return False
+    state[id_] = {'error': error, 'count': 1, 'first': now, 'last': now}
+    write_error_state(state)
+    return True
+
+
 def safe_run_job(id_=None, *args, **kwargs):
     """Safely run a job, catching all the exceptions
 
@@ -437,16 +516,22 @@ def safe_run_job(id_=None, *args, **kwargs):
     :returns: True in case of success
     :rtype: bool"""
     try:
-        run_job(id_, *args, **kwargs)
+        res = run_job(id_, *args, **kwargs)
     except Exception as e:
+        error = '%s: %s' % (type(e).__name__, e)
+        if not should_notify_error(id_, error):
+            return False
         recipient = SMTP_SETTINGS.get('smtp-username') or EMAIL_FROM
         schedule = get_schedule(id_, add_id=False)
         url = schedule.get('url') or ''
         context = {'id': id_, 'url': url, 'url_suffix': ' (%s)' % url if url else '',
-                   'error': str(e)}
+                   'error': error}
         template = read_email_template(EMAIL_ERROR_TEMPLATE, ERROR_EMAIL_TEMPLATE)
         subject, body = render_email_template(template, context, 'diffido job error')
         send_email(to=recipient, subject=subject, body=body)
+        return False
+    reset_error_state(id_)
+    return res
 
 
 def send_email(to, subject='diffido', body='', from_=None, attachments=None):
@@ -1071,7 +1156,7 @@ class TemplateHandler(BaseHandler):
 
 def serve():
     """Read configuration and start the server."""
-    global EMAIL_FROM, EMAIL_TEMPLATE, EMAIL_ERROR_TEMPLATE, SMTP_SETTINGS
+    global EMAIL_FROM, EMAIL_TEMPLATE, EMAIL_ERROR_TEMPLATE, SMTP_SETTINGS, ERROR_EMAIL_INTERVAL
     jobstores = {'default': SQLAlchemyJobStore(url=JOBS_STORE)}
     scheduler = TornadoScheduler(jobstores=jobstores, timezone=pytz.utc)
     scheduler.start()
@@ -1087,6 +1172,8 @@ def serve():
            help='file with the template of the email sent when a page changes', type=str)
     define('email-error-template', default=DEFAULT_EMAIL_ERROR_TEMPLATE,
            help='file with the template of the email sent when a job fails', type=str)
+    define('error-email-interval', default=ERROR_EMAIL_INTERVAL,
+           help='seconds to wait before sending the error email again for the same error (0 to never resend)', type=int)
     define('user-agent', default='Diffido/%s (%s)' % (API_VERSION, PROJECT_URL),
            help='User-Agent header for outgoing HTTP/HTTPS requests', type=str)
     define('smtp-host', default='localhost', help='SMTP server address', type=str)
@@ -1109,6 +1196,7 @@ def serve():
         EMAIL_FROM = options.admin_email
     EMAIL_TEMPLATE = options.email_template
     EMAIL_ERROR_TEMPLATE = options.email_error_template
+    ERROR_EMAIL_INTERVAL = options.error_email_interval
 
     for key, value in options.as_dict().items():
         if key.startswith('smtp-'):
