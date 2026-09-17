@@ -50,6 +50,7 @@ from tornado import gen, escape
 
 
 JOBS_STORE = 'sqlite:///conf/jobs.db'
+VERSION = '4.0'
 API_VERSION = '1.0'
 PROJECT_URL = 'https://github.com/alberanid/diffido'
 SCHEDULES_FILE = 'conf/schedules.json'
@@ -1064,6 +1065,7 @@ class TemplateHandler(BaseHandler):
         if args and args[0]:
             page = args[0].strip('/')
         arguments = self.arguments
+        arguments.setdefault('version', VERSION)
         self.render(page, **arguments)
 
 
