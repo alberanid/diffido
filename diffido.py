@@ -52,7 +52,7 @@ from tornado import gen, escape
 
 
 JOBS_STORE = 'sqlite:///conf/jobs.db'
-VERSION = '6.0'
+VERSION = '7.0'
 API_VERSION = '1.0'
 PROJECT_URL = 'https://github.com/alberanid/diffido'
 SCHEDULES_FILE = 'conf/schedules.json'
@@ -219,6 +219,108 @@ def user_agent():
     return getattr(options, 'user_agent', '')
 
 
+ALLOWED_HTTP_METHODS = ('GET', 'POST', 'PUT', 'DELETE', 'OPTIONS')
+
+
+def parse_header_lines(text):
+    """Parse a multiline text of `Name: value` HTTP header lines into a dict.
+
+    Lines are split on newlines only; blank lines and lines without a colon
+    are skipped.  The name is everything before the first colon and the
+    value everything after it, both stripped; when the same name appears
+    multiple times, the last occurrence wins.
+
+    :param text: multiline text of `Name: value` header lines
+    :type text: str
+    :returns: dict of header name / value pairs
+    :rtype: dict"""
+    headers = {}
+    for line in (text or '').splitlines():
+        if ':' not in line:
+            continue
+        name, value = line.split(':', 1)
+        name = name.strip()
+        if not name:
+            continue
+        headers[name] = value.strip()
+    return headers
+
+
+def parse_cookies(text):
+    """Parse a text of `name=value` cookie pairs into a dict.
+
+    Pairs are separated by semicolons and/or newlines; pairs without an `=`
+    separator or with an empty name are skipped.  Only the first `=`
+    separates name and value, so values may contain `=` characters.  Both
+    name and value are stripped; when the same name appears multiple times,
+    the last occurrence wins.
+
+    :param text: `name=value` pairs separated by semicolons or newlines
+    :type text: str
+    :returns: dict of cookie name / value pairs
+    :rtype: dict"""
+    cookies = {}
+    for piece in re.split(r'[;\n]', text or ''):
+        if '=' not in piece:
+            continue
+        name, value = piece.split('=', 1)
+        name = name.strip()
+        if not name:
+            continue
+        cookies[name] = value.strip()
+    return cookies
+
+
+def request_options(schedule):
+    """Build the keyword arguments used to fetch a schedule's URL.
+
+    Pure function: it only reads the schedule and builds a dict, without
+    doing any I/O.  Supported schedule options:
+
+    * `http_method`: one of `ALLOWED_HTTP_METHODS` (default: `GET`)
+    * `auth_type`: `basic`, `digest` or `bearer`; the first two use the
+      `auth_username` and `auth_password` options, the latter `auth_token`
+    * `custom_headers`: multiline text of `Name: value` header lines,
+      overriding any header set by the other options
+    * `cookies`: `name=value` pairs separated by semicolons or newlines
+    * `request_body`: body sent with the request; when set, the
+      `Content-Type` header is taken from `body_content_type` (unless a
+      custom header already sets it), defaulting to
+      `application/x-www-form-urlencoded`
+
+    :param schedule: the schedule definition
+    :type schedule: dict
+    :returns: kwargs to pass to `requests.request`
+    :rtype: dict
+    :raises ValueError: when `http_method` is not in `ALLOWED_HTTP_METHODS`,
+        or `auth_type` is `basic` or `digest` without credentials"""
+    method = (schedule.get('http_method') or 'GET').strip().upper()
+    if method not in ALLOWED_HTTP_METHODS:
+        raise ValueError('unsupported http_method %r' % method)
+    headers = {'User-Agent': user_agent()}
+    auth_type = schedule.get('auth_type')
+    if auth_type == 'bearer' and schedule.get('auth_token'):
+        headers['Authorization'] = 'Bearer %s' % schedule.get('auth_token')
+    headers.update(parse_header_lines(schedule.get('custom_headers')))
+    auth = None
+    if auth_type in ('basic', 'digest'):
+        if not (schedule.get('auth_username') or schedule.get('auth_password')):
+            raise ValueError('auth_type %s requires auth_username or auth_password' % auth_type)
+        credentials = (schedule.get('auth_username') or '', schedule.get('auth_password') or '')
+        if auth_type == 'basic':
+            auth = requests.auth.HTTPBasicAuth(*credentials)
+        else:
+            auth = requests.auth.HTTPDigestAuth(*credentials)
+    cookies = parse_cookies(schedule.get('cookies')) or None
+    data = schedule.get('request_body') or None
+    if data:
+        if schedule.get('body_content_type'):
+            headers.setdefault('Content-Type', schedule.get('body_content_type'))
+        else:
+            headers.setdefault('Content-Type', 'application/x-www-form-urlencoded')
+    return {'method': method, 'headers': headers, 'auth': auth, 'cookies': cookies, 'data': data}
+
+
 def _commit_job(id_, filename, content, queue):
     """Store the fetched content and commit it.
 
@@ -293,8 +395,10 @@ def run_job(id_=None, force=False, *args, **kwargs):
     if not schedule.get('enabled') and not force:
         logger.info('not running job %s: disabled' % id_)
         return True
-    req = requests.get(url, headers={'User-Agent': user_agent()},
-                       allow_redirects=True, timeout=(30.10, 240))
+    opts = request_options(schedule)
+    req = requests.request(opts['method'], url, headers=opts['headers'], auth=opts['auth'],
+                           cookies=opts['cookies'], data=opts['data'],
+                           allow_redirects=True, timeout=(30.10, 240))
     content = req.text
     xpath = schedule.get('xpath')
     if xpath:

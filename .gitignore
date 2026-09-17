@@ -10,3 +10,4 @@ ssl/*.pem
 *.so
 .editorconfig
 .codegraph
+.omp

@@ -50,6 +50,16 @@ Each schedule has its own web page GUI; the settings should be pretty self-expla
 - **minimum change**: float between 0.0 and 1.0, which represent the minimum amount of the page (in percentage of number of lines) that has to be changed to send a notification; if left empty, any change will be notified
 - **crontab**: a complete crontab definition, to specify the period of the check
 
+Each schedule can also customize the HTTP request used to fetch the page:
+
+- **Method**: the HTTP method (`GET`, `POST`, `PUT`, `DELETE` or `OPTIONS`; default `GET`). Non-GET methods additionally show the *Request body* and *Content type* fields.
+- **Authentication**: `Basic` and `Digest` use the *Username* and *Password* fields; `Bearer token` uses the *Bearer token* field (for example a long-lived JWT, transported as a bearer token).
+- **Custom headers**: one `Name: value` pair per line (for example `X-Api-Key: secret`); they override any header set by the other options, including the default `User-Agent` and `Authorization`.
+- **Cookies**: static cookies, as `name=value` pairs separated by semicolons (for example `session=xyz`); useful to fetch pages that require a logged-in session (copy the cookies from your browser). Automatic login with credentials is not supported.
+- **Request body** and **Content type**: body sent with non-GET requests; when a body is set but no content type is, `application/x-www-form-urlencoded` is used.
+
+Credentials are stored in plaintext in *conf/schedules.json* (which is gitignored): treat that file accordingly. Note that wrong credentials are not reported as job failures: the server's error or login page is fetched and diffed like any other page, which will surface as (unwanted) changes.
+
 
 # Notifications
 

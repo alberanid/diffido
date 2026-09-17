@@ -107,6 +107,15 @@
             const isCron = input("trigger").value === "cron";
             cron.hidden = !isCron; interval.hidden = isCron;
         };
+        const authCredFields = form.querySelector(".auth-cred-fields");
+        const authTokenField = form.querySelector(".auth-token-field");
+        const bodyFields = form.querySelector(".body-fields");
+        const updateHttpFields = () => {
+            const authType = input("auth_type").value;
+            authCredFields.hidden = !(authType === "basic" || authType === "digest");
+            authTokenField.hidden = authType !== "bearer";
+            bodyFields.hidden = input("http_method").value === "GET";
+        };
         const populate = schedule => Object.entries(schedule).forEach(([key, value]) => {
             const field = input(key);
             if (!field) return;
@@ -119,7 +128,10 @@
             catch (error) { showStatus(error.message, true); }
         }
         updateTrigger();
+        updateHttpFields();
         input("trigger").addEventListener("change", updateTrigger);
+        input("http_method").addEventListener("change", updateHttpFields);
+        input("auth_type").addEventListener("change", updateHttpFields);
         form.addEventListener("submit", async event => {
             event.preventDefault();
             if (!form.reportValidity()) return;

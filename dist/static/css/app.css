@@ -38,7 +38,7 @@ input, select { width: 100%; min-height: 42px; padding: 8px 10px; border: 1px so
 input:focus, select:focus { border-color: var(--primary); outline: 3px solid rgba(44, 92, 197, .16); }
 fieldset { display: grid; gap: 18px; margin: 28px 0 0; padding: 20px; border: 1px solid var(--border); border-radius: 10px; } legend { padding: 0 6px; font-weight: 700; }
 .switch { display: flex; align-items: center; gap: 9px; color: var(--text); } .switch input { width: 18px; min-height: 18px; margin: 0; }
-.cron-field[hidden], .interval-fields[hidden], .delete[hidden] { display: none; }
+.cron-field[hidden], .interval-fields[hidden], .delete[hidden], .auth-cred-fields[hidden], .auth-token-field[hidden], .body-fields[hidden] { display: none; }
 .revision-output { overflow: auto; margin: 0; padding: 18px; border-radius: 10px; background: #172033; color: #eaf0fb; font: .8rem/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; word-break: break-word; max-height: 70vh; }
 footer { padding: 0 16px 28px; color: var(--muted); font-size: .85rem; text-align: center; }
 @media (max-width: 720px) { .page-shell { width: min(100% - 20px, 1120px); margin: 10px auto 24px; } .card { border-radius: 12px; } .form-grid { grid-template-columns: 1fr; } .table-wrap th, .table-wrap td { padding: 11px 8px; } .page-header { align-items: flex-start; } }
