@@ -118,7 +118,7 @@
             heading.textContent = `${data.schedule.title || "Schedule"} history`;
             const render = () => {
                 const entries = toggle.checked ? data.history : data.history.filter(item => item.changes);
-                tbody.innerHTML = entries.length ? entries.map(item => `<tr><td><code>${escape(item.id.slice(0, 7))}</code></td><td>+${item.insertions}, −${item.deletions}</td><td>${date(item.message)}</td><td><a class="button secondary" href="/diff.html?id=${encodeURIComponent(id)}&diff=${encodeURIComponent(item.id)}"><span class="material-icons" aria-hidden="true">find_in_page</span>View diff</a></td></tr>`).join("") : '<tr><td colspan="4">No matching history entries.</td></tr>';
+                tbody.innerHTML = entries.length ? entries.map(item => `<tr><td><code>${escape(item.id.slice(0, 7))}</code></td><td>+${item.insertions}, −${item.deletions}</td><td>${date(item.message)}</td><td><a class="button secondary" href="/diff.html?id=${encodeURIComponent(id)}&diff=${encodeURIComponent(item.id)}"><span class="material-icons" aria-hidden="true">find_in_page</span>View diff</a></td><td><a class="button secondary" href="/revision.html?id=${encodeURIComponent(id)}&revision=${encodeURIComponent(item.id)}"><span class="material-icons" aria-hidden="true">description</span>View page</a></td></tr>`).join("") : '<tr><td colspan="5">No matching history entries.</td></tr>';
             };
             render(); toggle.addEventListener("change", render);
         } catch (error) { showStatus(error.message, true); }
@@ -136,5 +136,20 @@
         } catch (error) { showStatus(error.message, true); }
     };
 
-    ({schedules: initSchedules, schedule: initSchedule, history: initHistory, diff: initDiff}[page.dataset.page])();
+    const initRevision = async () => {
+        const revision = params.get("revision");
+        page.querySelector(".back-history").href = `/history.html?id=${encodeURIComponent(id || "")}`;
+        if (!id || !revision) { showStatus("A schedule ID and revision are required.", true); return; }
+        try {
+            const data = await api(`schedules/${encodeURIComponent(id)}/revision/${encodeURIComponent(revision)}`);
+            page.querySelector("h1").textContent = `${data.schedule.title || "Schedule"} revision ${revision.slice(0, 7)}`;
+            const files = (data.revision && data.revision.files) || [];
+            const output = page.querySelector(".revision-output");
+            if (!files.length) output.textContent = "No content stored for this revision.";
+            else if (files.length === 1) output.textContent = files[0].content || "No content stored for this revision.";
+            else output.textContent = files.map(file => `--- ${file.name} ---\n${file.content}`).join("\n\n");
+        } catch (error) { showStatus(error.message, true); }
+    };
+
+    ({schedules: initSchedules, schedule: initSchedule, history: initHistory, diff: initDiff, revision: initRevision}[page.dataset.page])();
 })();

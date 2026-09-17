@@ -186,6 +186,59 @@ def user_agent():
     return getattr(options, 'user_agent', '')
 
 
+def _commit_job(id_, filename, content, queue):
+    """Store the fetched content and commit it.
+
+    Run in a separate process: it changes the working directory of the
+    process, so it must not run in the server process.  Defined at module
+    level to be picklable by every multiprocessing start method.
+
+    :param id_: ID of the schedule
+    :type id_: str
+    :param filename: name of the file to write
+    :type filename: str
+    :param content: content to write in the file
+    :type content: str
+    :param queue: queue used to send back the result
+    :type queue: multiprocessing.Queue"""
+    try:
+        os.chdir('storage/%s' % id_)
+    except Exception as e:
+        logger.info('unable to move to storage/%s directory: %s; trying to create it...' % (id_, e))
+        _created = False
+        try:
+            _created = git_create_repo(id_)
+        except Exception as e:
+            logger.info('unable to move to storage/%s directory: %s; unable to create it' % (id_, e))
+        if not _created:
+            return queue.put({})
+    current_lines = 0
+    if os.path.isfile(filename):
+        with open(filename, 'r') as fd:
+            for line in fd:
+                current_lines += 1
+    with open(filename, 'w') as fd:
+        fd.write(content)
+    p = subprocess.Popen([GIT_CMD, 'add', filename])
+    p.communicate()
+    p = subprocess.Popen([GIT_CMD, 'commit', '-m', '%s' % datetime.datetime.utcnow(), '--allow-empty'],
+                         stdout=subprocess.PIPE)
+    stdout, _ = p.communicate()
+    stdout = stdout.decode('utf-8')
+    insert = re_insertion.findall(stdout)
+    if insert:
+        insert = int(insert[0])
+    else:
+        insert = 0
+    delete = re_deletion.findall(stdout)
+    if delete:
+        delete = int(delete[0])
+    else:
+        delete = 0
+    queue.put({'insertions': insert, 'deletions': delete, 'previous_lines': current_lines,
+               'changes': max(insert, delete)})
+
+
 def run_job(id_=None, force=False, *args, **kwargs):
     """Run a job
 
@@ -218,45 +271,8 @@ def run_job(id_=None, force=False, *args, **kwargs):
             logger.warning('unable to extract XPath %s: %s' % (xpath, e))
     req_path = urlparse(req.url).path
     base_name = os.path.basename(req_path) or 'index.html'
-    def _commit(id_, filename, content, queue):
-        try:
-            os.chdir('storage/%s' % id_)
-        except Exception as e:
-            logger.info('unable to move to storage/%s directory: %s; trying to create it...' % (id_, e))
-            _created = False
-            try:
-                _created = git_create_repo(id_)
-            except Exception as e:
-                logger.info('unable to move to storage/%s directory: %s; unable to create it' % (id_, e))
-            if not _created:
-                return False
-        current_lines = 0
-        if os.path.isfile(filename):
-            with open(filename, 'r') as fd:
-                for line in fd:
-                    current_lines += 1
-        with open(filename, 'w') as fd:
-            fd.write(content)
-        p = subprocess.Popen([GIT_CMD, 'add', filename])
-        p.communicate()
-        p = subprocess.Popen([GIT_CMD, 'commit', '-m', '%s' % datetime.datetime.utcnow(), '--allow-empty'],
-                             stdout=subprocess.PIPE)
-        stdout, _ = p.communicate()
-        stdout = stdout.decode('utf-8')
-        insert = re_insertion.findall(stdout)
-        if insert:
-            insert = int(insert[0])
-        else:
-            insert = 0
-        delete = re_deletion.findall(stdout)
-        if delete:
-            delete = int(delete[0])
-        else:
-            delete = 0
-        queue.put({'insertions': insert, 'deletions': delete, 'previous_lines': current_lines,
-                   'changes': max(insert, delete)})
     queue = multiprocessing.Queue()
-    p = multiprocessing.Process(target=_commit, args=(id_, base_name, content, queue))
+    p = multiprocessing.Process(target=_commit_job, args=(id_, base_name, content, queue))
     p.start()
     res = queue.get()
     p.join()
@@ -366,6 +382,29 @@ def send_email(to, subject='diffido', body='', from_=None):
     return True
 
 
+def _run_git_in_dir(id_, cmd, queue):
+    """Run a git command inside the repository of a schedule.
+
+    Run in a separate process: it changes the working directory of the
+    process, so it must not run in the server process.  Defined at module
+    level to be picklable by every multiprocessing start method.
+
+    :param id_: ID of the schedule
+    :type id_: str
+    :param cmd: the git command to run
+    :type cmd: list
+    :param queue: queue used to send back the output
+    :type queue: multiprocessing.Queue"""
+    try:
+        os.chdir('storage/%s' % id_)
+    except Exception as e:
+        logger.info('unable to move to storage/%s directory: %s' % (id_, e))
+        return queue.put(b'')
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    stdout, _ = p.communicate()
+    queue.put(stdout)
+
+
 def get_history(id_, limit=None, add_info=False):
     """Read the history of a schedule
 
@@ -377,20 +416,11 @@ def get_history(id_, limit=None, add_info=False):
     :type add_info: int
     :returns: information about the schedule and its history
     :rtype: dict"""
-    def _history(id_, limit, queue):
-        try:
-            os.chdir('storage/%s' % id_)
-        except Exception as e:
-            logger.info('unable to move to storage/%s directory: %s' % (id_, e))
-            return queue.put(b'')
-        cmd = [GIT_CMD, 'log', '--pretty=oneline', '--shortstat']
-        if limit is not None:
-            cmd.append('-%s' % limit)
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        stdout, _ = p.communicate()
-        queue.put(stdout)
+    cmd = [GIT_CMD, 'log', '--pretty=oneline', '--shortstat']
+    if limit is not None:
+        cmd.append('-%s' % limit)
     queue = multiprocessing.Queue()
-    p = multiprocessing.Process(target=_history, args=(id_, limit, queue))
+    p = multiprocessing.Process(target=_run_git_in_dir, args=(id_, cmd, queue))
     p.start()
     res = queue.get().decode('utf-8')
     p.join()
@@ -452,23 +482,72 @@ def get_diff(id_, commit_id='HEAD', old_commit_id=None):
     :type old_commit_id: str
     :returns: information about the schedule and the diff between commits
     :rtype: dict"""
-    def _history(id_, commit_id, old_commit_id, queue):
-        try:
-            os.chdir('storage/%s' % id_)
-        except Exception as e:
-            logger.info('unable to move to storage/%s directory: %s' % (id_, e))
-            return queue.put(b'')
-        p = subprocess.Popen([GIT_CMD, 'diff', old_commit_id or '%s~' % commit_id, commit_id],
-                             stdout=subprocess.PIPE)
-        stdout, _ = p.communicate()
-        queue.put(stdout)
+    cmd = [GIT_CMD, 'diff', old_commit_id or '%s~' % commit_id, commit_id]
     queue = multiprocessing.Queue()
-    p = multiprocessing.Process(target=_history, args=(id_, commit_id, old_commit_id, queue))
+    p = multiprocessing.Process(target=_run_git_in_dir, args=(id_, cmd, queue))
     p.start()
     res = queue.get().decode('utf-8')
     p.join()
     schedule = get_schedule(id_)
     return {'diff': res, 'schedule': schedule}
+
+
+def _read_revision(id_, commit_id, queue):
+    """Read the files stored at a given revision of a schedule.
+
+    Run in a separate process: it changes the working directory of the
+    process, so it must not run in the server process.  Defined at module
+    level to be picklable by every multiprocessing start method.
+
+    :param id_: ID of the schedule
+    :type id_: str
+    :param commit_id: the revision to read
+    :type commit_id: str
+    :param queue: queue used to send back the list of files
+    :type queue: multiprocessing.Queue"""
+    try:
+        os.chdir('storage/%s' % id_)
+    except Exception as e:
+        logger.info('unable to move to storage/%s directory: %s' % (id_, e))
+        return queue.put(None)
+    try:
+        p = subprocess.Popen([GIT_CMD, 'ls-tree', '-r', '--name-only', commit_id],
+                             stdout=subprocess.PIPE)
+        stdout, _ = p.communicate()
+        if p.returncode != 0:
+            return queue.put(None)
+        files = []
+        for filename in stdout.decode('utf-8').splitlines():
+            if not filename:
+                continue
+            p = subprocess.Popen([GIT_CMD, 'show', '%s:%s' % (commit_id, filename)],
+                                 stdout=subprocess.PIPE)
+            content, _ = p.communicate()
+            files.append({'name': filename,
+                          'content': content.decode('utf-8', 'replace') if p.returncode == 0 else ''})
+    except Exception as e:
+        logger.error('unable to read revision %s of schedule %s: %s' % (commit_id, id_, e))
+        return queue.put(None)
+    queue.put(files)
+
+
+def get_revision(id_, commit_id='HEAD'):
+    """Return the page content stored at a given revision
+
+    :param id_: ID of the schedule
+    :type id_: str
+    :param commit_id: the revision to show; HEAD by default
+    :type commit_id: str
+    :returns: information about the schedule and the content stored at the revision
+    :rtype: dict"""
+    commit_id = commit_id or 'HEAD'
+    queue = multiprocessing.Queue()
+    p = multiprocessing.Process(target=_read_revision, args=(id_, commit_id, queue))
+    p.start()
+    files = queue.get()
+    p.join()
+    schedule = get_schedule(id_)
+    return {'revision': {'id': commit_id, 'files': files or []}, 'schedule': schedule}
 
 
 def scheduler_update(scheduler, id_):
@@ -741,6 +820,13 @@ class DiffHandler(BaseHandler):
         self.write(get_diff(id_, commit_id, old_commit_id))
 
 
+class RevisionHandler(BaseHandler):
+    """Revision handler."""
+    @gen.coroutine
+    def get(self, id_, commit_id='HEAD', *args, **kwargs):
+        self.write(get_revision(id_, commit_id))
+
+
 class TemplateHandler(BaseHandler):
     """Handler for the template files in the / path."""
     @gen.coroutine
@@ -808,6 +894,7 @@ def serve():
     _schedules_path = r'schedules/?(?P<id_>\d+)?'
     _history_path = r'schedules/?(?P<id_>\d+)/history'
     _diff_path = r'schedules/(?P<id_>\d+)/diff/(?P<commit_id>[0-9a-f]+)/?(?P<old_commit_id>[0-9a-f]+)?/?'
+    _revision_path = r'schedules/(?P<id_>\d+)/revision/?(?P<commit_id>[0-9a-f]+)?'
     application = tornado.web.Application([
             (r'/api/%s' % _reset_schedules_path, ResetSchedulesHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _reset_schedules_path), ResetSchedulesHandler, init_params),
@@ -817,6 +904,8 @@ def serve():
             (r'/api/v%s/%s' % (API_VERSION, _history_path), HistoryHandler, init_params),
             (r'/api/%s' % _diff_path, DiffHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _diff_path), DiffHandler, init_params),
+            (r'/api/%s' % _revision_path, RevisionHandler, init_params),
+            (r'/api/v%s/%s' % (API_VERSION, _revision_path), RevisionHandler, init_params),
             (r'/api/%s' % _schedules_path, SchedulesHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _schedules_path), SchedulesHandler, init_params),
             (r'/?(.*)', TemplateHandler, init_params),

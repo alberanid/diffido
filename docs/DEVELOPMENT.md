@@ -11,6 +11,7 @@
 - /api/schedules/:id/run POST - immediately run a schedule
 - /api/schedules/:id/history GET - get the history of a schedule
 - /api/schedules/:id/diff/:commit_id/:old_commit_id GET - get the diff from two commits of a schedule
+- /api/schedules/:id/revision/:commit_id GET - get the page content stored at a given revision of a schedule
 
 
 ## Data layout
