@@ -9,7 +9,7 @@
 - /api/schedules/:id PUT - update a schedule
 - /api/schedules/:id DELETE - delete a schedule
 - /api/schedules/:id/run POST - immediately run a schedule
-- /api/schedules/:id/history GET - get the history of a schedule
+- /api/schedules/:id/history GET - get the history of a schedule (accepts `page`, `page_size` and `show_empty` query arguments; `show_empty=0` excludes entries with no changes)
 - /api/schedules/:id/diff/:commit_id/:old_commit_id GET - get the diff from two commits of a schedule
 - /api/schedules/:id/revision/:commit_id GET - get the page content stored at a given revision of a schedule
 

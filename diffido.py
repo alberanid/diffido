@@ -405,7 +405,7 @@ def _run_git_in_dir(id_, cmd, queue):
     queue.put(stdout)
 
 
-def get_history(id_, limit=None, offset=0, add_info=False):
+def get_history(id_, limit=None, offset=0, add_info=False, show_empty=True):
     """Read the history of a schedule
 
     :param id_: ID of the schedule
@@ -416,13 +416,18 @@ def get_history(id_, limit=None, offset=0, add_info=False):
     :type offset: int
     :param add_info: add information about the schedule itself
     :type add_info: int
+    :param show_empty: if False, exclude entries with no changes
+    :type show_empty: bool
     :returns: information about the schedule and its history
     :rtype: dict"""
     cmd = [GIT_CMD, 'log', '--pretty=oneline', '--shortstat']
-    if limit is not None:
-        cmd.append('-%s' % limit)
-    if offset:
-        cmd.extend(['--skip', str(offset)])
+    # When entries with no changes are filtered out, git can't skip them
+    # while paginating, so the whole history is read and sliced afterwards.
+    if show_empty:
+        if limit is not None:
+            cmd.append('-%s' % limit)
+        if offset:
+            cmd.extend(['--skip', str(offset)])
     queue = multiprocessing.Queue()
     p = multiprocessing.Process(target=_run_git_in_dir, args=(id_, cmd, queue))
     p.start()
@@ -438,20 +443,26 @@ def get_history(id_, limit=None, offset=0, add_info=False):
         info['deletions'] = int(deletions[0]) if deletions else 0
         info['changes'] = max(info['insertions'], info['deletions'])
         history.append(info)
+    if not show_empty:
+        history = [item for item in history if item.get('changes')]
+    total = len(history)
+    if show_empty:
+        count_queue = multiprocessing.Queue()
+        p = multiprocessing.Process(target=_run_git_in_dir, args=(id_, [GIT_CMD, 'rev-list', '--count', 'HEAD'], count_queue))
+        p.start()
+        try:
+            total = int(count_queue.get().decode('utf-8').strip() or 0)
+        except (ValueError, UnicodeDecodeError):
+            total = 0
+        p.join()
+    else:
+        start = int(offset or 0)
+        history = history[start:start + limit] if limit is not None else history[start:]
     last_id = None
     if history and 'id' in history[0]:
         last_id = history[0]['id']
     for idx, item in enumerate(history):
         item['seq'] = idx + 1 + int(offset or 0)
-    total = 0
-    count_queue = multiprocessing.Queue()
-    p = multiprocessing.Process(target=_run_git_in_dir, args=(id_, [GIT_CMD, 'rev-list', '--count', 'HEAD'], count_queue))
-    p.start()
-    try:
-        total = int(count_queue.get().decode('utf-8').strip() or 0)
-    except (ValueError, UnicodeDecodeError):
-        total = 0
-    p.join()
     data = {'history': history, 'last_id': last_id, 'total': total}
     if add_info:
         data['schedule'] = get_schedule(id_)
@@ -710,6 +721,20 @@ def pagination_params(handler, default=DEFAULT_PAGE_SIZE):
     return _int_arg('page', 1), _int_arg('page_size', default)
 
 
+def bool_arg(value, default=False):
+    """Interpret a query string argument as a boolean.
+
+    :param value: the raw query string value (None when missing)
+    :type value: str
+    :param default: value returned when the argument is missing
+    :type default: bool
+    :returns: the boolean value
+    :rtype: bool"""
+    if value is None:
+        return default
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
 def build_pagination(page, page_size, total):
     """Build a pagination metadata dictionary.
 
@@ -868,7 +893,8 @@ class HistoryHandler(BaseHandler):
     def get(self, id_, *args, **kwargs):
         page, page_size = pagination_params(self)
         offset = (page - 1) * page_size
-        data = get_history(id_, limit=page_size, offset=offset, add_info=True)
+        show_empty = bool_arg(self.get_query_argument('show_empty', None), default=True)
+        data = get_history(id_, limit=page_size, offset=offset, add_info=True, show_empty=show_empty)
         data['pagination'] = build_pagination(page, page_size, data.get('total', 0))
         self.write(data)
 

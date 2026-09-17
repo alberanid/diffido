@@ -145,23 +145,22 @@
         const toggle = page.querySelector("[name=show-empty]");
         const nav = page.querySelector(".pagination");
         if (!id) { showStatus("A schedule ID is required.", true); return; }
-        let currentPage = Math.max(1, Number(params.get("page")) || 1);
         const pageSize = Math.max(1, Number(params.get("page_size")) || 20);
         const render = data => {
-            const entries = toggle.checked ? data.history : (data.history || []).filter(item => item.changes);
+            const entries = data.history || [];
             tbody.innerHTML = entries.length ? entries.map(item => `<tr><td><code>${escape(item.id.slice(0, 7))}</code></td><td>+${item.insertions}, −${item.deletions}</td><td>${date(item.message)}</td><td><a class="button secondary" href="/diff.html?id=${encodeURIComponent(id)}&diff=${encodeURIComponent(item.id)}"><span class="material-icons" aria-hidden="true">find_in_page</span>View diff</a></td><td><a class="button secondary" href="/revision.html?id=${encodeURIComponent(id)}&revision=${encodeURIComponent(item.id)}"><span class="material-icons" aria-hidden="true">description</span>View page</a></td></tr>`).join("") : '<tr><td colspan="5">No matching history entries.</td></tr>';
             renderPagination(nav, data.pagination, load);
         };
         const load = async pageNum => {
             try {
-                const data = await api(`schedules/${encodeURIComponent(id)}/history?page=${pageNum}&page_size=${pageSize}`);
+                const showEmpty = toggle.checked ? 1 : 0;
+                const data = await api(`schedules/${encodeURIComponent(id)}/history?page=${pageNum}&page_size=${pageSize}&show_empty=${showEmpty}`);
                 heading.textContent = `${data.schedule.title || "Schedule"} history`;
-                currentPage = pageNum;
                 render(data);
             } catch (error) { showStatus(error.message, true); }
         };
-        await load(currentPage);
-        toggle.addEventListener("change", () => load(currentPage));
+        await load(Math.max(1, Number(params.get("page")) || 1));
+        toggle.addEventListener("change", () => load(1));
     };
 
     const initDiff = async () => {
