@@ -5,7 +5,7 @@
 <form class="card" data-page="schedule" novalidate>
     <header class="page-header">
         <div><p class="eyebrow">Page monitoring</p><h1>Schedule</h1></div>
-        <a class="button secondary" href="/">Back</a>
+        <a class="button secondary" href="/"><span class="material-icons" aria-hidden="true">arrow_back</span>Back</a>
     </header>
     <p class="status" role="status" aria-live="polite"></p>
     <div class="form-grid">
@@ -27,6 +27,6 @@
         </div>
         <label class="cron-field">Crontab<input name="cron_crontab" placeholder="*/5 * * * *" autocomplete="off"></label>
     </fieldset>
-    <div class="actions"><button class="button primary" type="submit">Save schedule</button><button class="button danger delete" type="button">Delete schedule</button></div>
+    <div class="actions"><button class="button primary" type="submit"><span class="material-icons" aria-hidden="true">save</span>Save schedule</button><button class="button danger delete" type="button"><span class="material-icons" aria-hidden="true">delete</span>Delete schedule</button></div>
 </form>
 {% end %}

@@ -47,13 +47,13 @@
             const {schedules = {}} = await api("schedules");
             const entries = Object.entries(schedules);
             if (!entries.length) {
-                tbody.innerHTML = '<tr><td colspan="4">No schedules yet. Add one to begin monitoring.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5">No schedules yet. Add one to begin monitoring.</td></tr>';
                 return;
             }
             tbody.innerHTML = entries.map(([scheduleId, item]) => `<tr>
                 <td><a href="/schedule.html?id=${encodeURIComponent(scheduleId)}">${escape(item.title || "Untitled")}</a><br><small><a href="${safeUrl(item.url)}" target="_blank" rel="noopener">${escape(item.url || "")}</a></small></td>
-                <td>${scheduleFrequency(item)}</td><td>${date(item.last_history && item.last_history.message)}</td>
-                <td><a class="button secondary" href="/history.html?id=${encodeURIComponent(scheduleId)}">History</a> <button class="button primary" data-run="${escape(scheduleId)}">Run now</button></td>
+                <td>${scheduleFrequency(item)}</td><td>${date(item.last_history && item.last_history.message)}</td><td>${date(item.last_change && item.last_change.message)}</td>
+                <td class="row-actions"><a class="button secondary" href="/history.html?id=${encodeURIComponent(scheduleId)}" aria-label="History" title="History"><span class="material-icons" aria-hidden="true">history</span></a> <button class="button primary" data-run="${escape(scheduleId)}" aria-label="Run now" title="Run now"><span class="material-icons" aria-hidden="true">play_arrow</span></button> <a class="button secondary" href="/schedule.html?id=${encodeURIComponent(scheduleId)}" aria-label="Edit" title="Edit"><span class="material-icons" aria-hidden="true">edit</span></a></td>
             </tr>`).join("");
         } catch (error) { showStatus(error.message, true); }
         tbody.addEventListener("click", async event => {
@@ -118,7 +118,7 @@
             heading.textContent = `${data.schedule.title || "Schedule"} history`;
             const render = () => {
                 const entries = toggle.checked ? data.history : data.history.filter(item => item.changes);
-                tbody.innerHTML = entries.length ? entries.map(item => `<tr><td><code>${escape(item.id.slice(0, 7))}</code></td><td>+${item.insertions}, −${item.deletions}</td><td>${date(item.message)}</td><td><a class="button secondary" href="/diff.html?id=${encodeURIComponent(id)}&diff=${encodeURIComponent(item.id)}">View diff</a></td></tr>`).join("") : '<tr><td colspan="4">No matching history entries.</td></tr>';
+                tbody.innerHTML = entries.length ? entries.map(item => `<tr><td><code>${escape(item.id.slice(0, 7))}</code></td><td>+${item.insertions}, −${item.deletions}</td><td>${date(item.message)}</td><td><a class="button secondary" href="/diff.html?id=${encodeURIComponent(id)}&diff=${encodeURIComponent(item.id)}"><span class="material-icons" aria-hidden="true">find_in_page</span>View diff</a></td></tr>`).join("") : '<tr><td colspan="4">No matching history entries.</td></tr>';
             };
             render(); toggle.addEventListener("change", render);
         } catch (error) { showStatus(error.message, true); }

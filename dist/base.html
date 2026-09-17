@@ -5,7 +5,8 @@
         <meta charset="utf-8">
         <meta content="width=device-width, initial-scale=1" name="viewport">
         <meta name="color-scheme" content="light">
-        <link rel="stylesheet" href="/static/css/app.css">
+        <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
+        <link rel="stylesheet" href="{{ static_url('iconfont/material-icons.css') }}">
         {% block head %}{% end %}
         {% block style %}{% end %}
     </head>
@@ -16,6 +17,6 @@
         <footer>
             <span><a href="https://github.com/alberanid/diffido" target="_blank" rel="noopener">diffido</a> &copy; <a href="http://www.ismito.it/" target="_blank" rel="noopener">Davide Alberani</a></span>
         </footer>
-        <script src="/static/js/app.js" defer></script>
+        <script src="{{ static_url('js/app.js') }}" defer></script>
     </body>
 </html>

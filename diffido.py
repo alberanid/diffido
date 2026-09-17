@@ -54,8 +54,7 @@ SMTP_SETTINGS = {}
 GIT_CMD = 'git'
 
 re_commit = re.compile(
-    r'^(?P<id>[0-9a-f]{40}) (?P<message>.*)\n(?: .* '
-    r'(?P<insertions>\d+) insertion.* (?P<deletions>\d+) deletion.*$)?',
+    r'^(?P<id>[0-9a-f]{40}) (?P<message>.*)\n(?: (?P<stat>[^\n]*)\n)?',
     re.M,
 )
 re_insertion = re.compile(r'(\d+) insertion')
@@ -82,6 +81,10 @@ def read_schedules():
                 except:
                     schedule['last_history'] = {}
                     continue
+                try:
+                    schedule['last_change'] = get_last_change(id_)
+                except:
+                    schedule['last_change'] = {}
             return schedules
     except Exception as e:
         logger.error('unable to read %s: %s' % (SCHEDULES_FILE, e))
@@ -378,8 +381,11 @@ def get_history(id_, limit=None, add_info=False):
     history = []
     for match in re_commit.finditer(res):
         info = match.groupdict()
-        info['insertions'] = int(info['insertions'] or 0)
-        info['deletions'] = int(info['deletions'] or 0)
+        stat = info.pop('stat', None) or ''
+        insertions = re_insertion.findall(stat)
+        deletions = re_deletion.findall(stat)
+        info['insertions'] = int(insertions[0]) if insertions else 0
+        info['deletions'] = int(deletions[0]) if deletions else 0
         info['changes'] = max(info['insertions'], info['deletions'])
         history.append(info)
     last_id = None
@@ -403,6 +409,20 @@ def get_last_history(id_):
     history = get_history(id_, limit=1)
     hist = history.get('history') or [{}]
     return hist[0]
+
+
+def get_last_change(id_):
+    """Read the most recent history entry of a schedule that detected a change
+
+    :param id_: ID of the schedule
+    :type id_: str
+    :returns: information about the most recent entry with changes
+    :rtype: dict"""
+    history = get_history(id_)
+    for item in history.get('history') or []:
+        if item.get('changes'):
+            return item
+    return {}
 
 
 def get_diff(id_, commit_id='HEAD', old_commit_id=None):
