@@ -53,7 +53,7 @@ from tornado import gen, escape
 
 
 JOBS_STORE = 'sqlite:///conf/jobs.db'
-VERSION = '7.0'
+VERSION = '8.0'
 API_VERSION = '1.0'
 PROJECT_URL = 'https://github.com/alberanid/diffido'
 SCHEDULES_FILE = 'conf/schedules.json'
@@ -68,6 +68,10 @@ ERROR_EMAIL_INTERVAL = 24 * 60 * 60
 EMAIL_SUBJECT_PREFIX = 'Subject:'
 SMTP_SETTINGS = {}
 GIT_CMD = 'git'
+# SHA-1 of the empty tree object (the default object format): the first commit
+# of a schedule has no parent revision, so its diff is computed against the
+# empty tree, showing it as a creation event.
+EMPTY_TREE_SHA = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 # Maximum number of diff lines sent to clients (diff page, notification emails).
 # Large diffs are truncated and flagged, to keep pages and payloads fast.
 MAX_DIFF_LINES = 1000
@@ -972,19 +976,34 @@ def get_diff(id_, commit_id='HEAD', old_commit_id=None):
     :type id_: str
     :param commit_id: the most recent commit ID; HEAD by default
     :type commit_id: str
-    :param old_commit_id: the older commit ID; if None, the previous commit is used
+    :param old_commit_id: the older commit ID; if None, the previous commit is used;
+                          if that does not exist (the first commit of the schedule),
+                          the diff is computed against the empty tree
     :type old_commit_id: str
     :returns: information about the schedule and the per-file diff chunks; if the
               diff is longer than MAX_DIFF_LINES lines, it is truncated (the last
               shown file is flagged) and the ``truncated`` flag is set (with
               ``total_lines`` and ``shown_lines``)
     :rtype: dict"""
-    cmd = [GIT_CMD, 'diff', old_commit_id or '%s~' % commit_id, commit_id]
+    if old_commit_id:
+        cmd = [GIT_CMD, 'diff', old_commit_id, commit_id]
+    else:
+        cmd = [GIT_CMD, 'diff', '%s~' % commit_id, commit_id]
     queue = multiprocessing.Queue()
     p = multiprocessing.Process(target=_run_git_in_dir, args=(id_, cmd, queue))
     p.start()
     returncode, res, stderr = queue.get()
     p.join()
+    if returncode != 0 and not old_commit_id:
+        # ``<commit_id>~`` does not exist for the first (root) commit of a
+        # schedule: fall back to the empty tree, so that the initial commit is
+        # shown as a creation event.
+        queue = multiprocessing.Queue()
+        p = multiprocessing.Process(target=_run_git_in_dir,
+                                    args=(id_, [GIT_CMD, 'diff', EMPTY_TREE_SHA, commit_id], queue))
+        p.start()
+        returncode, res, stderr = queue.get()
+        p.join()
     schedule = get_schedule(id_)
     if returncode != 0:
         message = stderr.decode('utf-8', 'replace').strip() or 'git diff exited with code %s' % returncode
