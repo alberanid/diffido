@@ -1,0 +1,2 @@
+Subject: diffido job error
+error executing job $id$url_suffix: $error

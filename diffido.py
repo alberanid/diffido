@@ -21,6 +21,7 @@ import json
 import pytz
 import shutil
 import smtplib
+from string import Template
 from urllib.parse import urlparse
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -54,8 +55,29 @@ PROJECT_URL = 'https://github.com/alberanid/diffido'
 SCHEDULES_FILE = 'conf/schedules.json'
 DEFAULT_CONF = 'conf/diffido.conf'
 EMAIL_FROM = 'diffido@localhost'
+DEFAULT_EMAIL_TEMPLATE = 'conf/email_template.txt'
+DEFAULT_EMAIL_ERROR_TEMPLATE = 'conf/email_error_template.txt'
+EMAIL_TEMPLATE = DEFAULT_EMAIL_TEMPLATE
+EMAIL_ERROR_TEMPLATE = DEFAULT_EMAIL_ERROR_TEMPLATE
+EMAIL_SUBJECT_PREFIX = 'Subject:'
 SMTP_SETTINGS = {}
 GIT_CMD = 'git'
+
+# Fallback content of the email templates, used when the files are missing
+# or unreadable; the first line is the subject of the email, when prefixed
+# with EMAIL_SUBJECT_PREFIX.
+CHANGE_EMAIL_TEMPLATE = """\
+Subject: $title page changed
+Schedule: $id$title_suffix
+URL: $url
+Change: $insertions insertion(s), $deletions deletion(s) out of $previous_lines previous line(s)
+$previous_revision_line$current_revision_line$date_line$xpath_line$minimum_change_line
+The unified diff is attached to this email.
+"""
+ERROR_EMAIL_TEMPLATE = """\
+Subject: diffido job error
+error executing job $id$url_suffix: $error
+"""
 
 re_commit = re.compile(
     r'^(?P<id>[0-9a-f]{40}) (?P<message>.*)\n(?: (?P<stat>[^\n]*)\n)?',
@@ -306,8 +328,60 @@ def run_job(id_=None, force=False, *args, **kwargs):
     return True
 
 
+def read_email_template(path, default):
+    """Return the content of an email template file.
+
+    The `default` template is returned when the file can not be read, so
+    that a missing or unreadable template never prevents an email from
+    being sent.
+
+    :param path: path of the template file
+    :type path: str
+    :param default: template used as a fallback
+    :type default: str
+    :returns: the content of the template
+    :rtype: str"""
+    try:
+        with open(path, 'r') as fd:
+            return fd.read()
+    except Exception as e:
+        logger.warning('unable to read email template %s: %s' % (path, e))
+        return default
+
+
+def render_email_template(template, context, default_subject='diffido'):
+    """Render an email template.
+
+    The first line of the template, when it starts with `Subject:`, is used
+    as the subject of the email; all the remaining lines are the body.
+    Placeholders are expanded with `string.Template` syntax; unknown
+    placeholders are left untouched.
+
+    :param template: the template
+    :type template: str
+    :param context: values used to expand the placeholders
+    :type context: dict
+    :param default_subject: subject used when the template has no
+                            `Subject:` line
+    :type default_subject: str
+    :returns: tuple with the subject and the body of the email
+    :rtype: tuple"""
+    subject = default_subject
+    body = template
+    first_line, sep, rest = template.partition('\n')
+    if first_line.startswith(EMAIL_SUBJECT_PREFIX):
+        subject = first_line[len(EMAIL_SUBJECT_PREFIX):].strip()
+        body = rest if sep else ''
+    subject = Template(subject).safe_substitute(context)
+    body = Template(body).safe_substitute(context).rstrip('\n')
+    return subject, body
+
+
 def build_change_email(id_, schedule, result, revision=None, old_revision=None):
     """Build subject and body of the notification email sent when a page changed.
+
+    Subject and body are built from the template read from the
+    `email_template` option (see `EMAIL_TEMPLATE`).
 
     :param id_: ID of the schedule
     :type id_: str
@@ -324,26 +398,30 @@ def build_change_email(id_, schedule, result, revision=None, old_revision=None):
     :rtype: tuple"""
     revision = revision or {}
     old_revision = old_revision or {}
-    title = schedule.get('title') or 'diffido'
-    subject = '%s page changed' % title
-    lines = ['Schedule: %s%s' % (id_, ' - %s' % title if schedule.get('title') else ''),
-             'URL: %s' % schedule.get('url'),
-             'Change: %s insertion(s), %s deletion(s) out of %s previous line(s)' % (
-                 result.get('insertions', 0), result.get('deletions', 0),
-                 result.get('previous_lines', 0))]
-    if old_revision.get('id'):
-        lines.append('Previous revision: %s' % old_revision['id'])
-    if revision.get('id'):
-        lines.append('Current revision:  %s' % revision['id'])
-    if revision.get('message'):
-        lines.append('Date: %s' % revision['message'])
-    if schedule.get('xpath'):
-        lines.append('XPath selector: %s' % schedule['xpath'])
-    if schedule.get('minimum_change'):
-        lines.append('Minimum change: %s' % schedule['minimum_change'])
-    lines.append('')
-    lines.append('The unified diff is attached to this email.')
-    return subject, '\n'.join(lines)
+    title = schedule.get('title')
+    context = {
+        'id': id_,
+        'title': title or 'diffido',
+        'title_suffix': ' - %s' % title if title else '',
+        'url': schedule.get('url') or '',
+        'insertions': result.get('insertions', 0),
+        'deletions': result.get('deletions', 0),
+        'changes': result.get('changes', 0),
+        'previous_lines': result.get('previous_lines', 0),
+        'previous_revision': old_revision.get('id') or '',
+        'current_revision': revision.get('id') or '',
+        'date': revision.get('message') or '',
+        'xpath': schedule.get('xpath') or '',
+        'minimum_change': schedule.get('minimum_change') or '',
+    }
+    for key, label in (('previous_revision', 'Previous revision'),
+                       ('current_revision', 'Current revision'),
+                       ('date', 'Date'), ('xpath', 'XPath selector'),
+                       ('minimum_change', 'Minimum change')):
+        # Whole lines, available only when the related value is set.
+        context['%s_line' % key] = '%s: %s\n' % (label, context[key]) if context[key] else ''
+    template = read_email_template(EMAIL_TEMPLATE, CHANGE_EMAIL_TEMPLATE)
+    return render_email_template(template, context, '$title page changed')
 
 
 def safe_run_job(id_=None, *args, **kwargs):
@@ -361,10 +439,12 @@ def safe_run_job(id_=None, *args, **kwargs):
         run_job(id_, *args, **kwargs)
     except Exception as e:
         recipient = SMTP_SETTINGS.get('smtp-username') or EMAIL_FROM
-        subject = 'diffido job error'
         schedule = get_schedule(id_, add_id=False)
-        url = ' (%s)' % schedule['url'] if schedule.get('url') else ''
-        body = 'error executing job %s%s: %s' % (id_, url, e)
+        url = schedule.get('url') or ''
+        context = {'id': id_, 'url': url, 'url_suffix': ' (%s)' % url if url else '',
+                   'error': str(e)}
+        template = read_email_template(EMAIL_ERROR_TEMPLATE, ERROR_EMAIL_TEMPLATE)
+        subject, body = render_email_template(template, context, 'diffido job error')
         send_email(to=recipient, subject=subject, body=body)
 
 
@@ -989,7 +1069,7 @@ class TemplateHandler(BaseHandler):
 
 def serve():
     """Read configuration and start the server."""
-    global EMAIL_FROM, SMTP_SETTINGS
+    global EMAIL_FROM, EMAIL_TEMPLATE, EMAIL_ERROR_TEMPLATE, SMTP_SETTINGS
     jobstores = {'default': SQLAlchemyJobStore(url=JOBS_STORE)}
     scheduler = TornadoScheduler(jobstores=jobstores, timezone=pytz.utc)
     scheduler.start()
@@ -1001,6 +1081,10 @@ def serve():
     define('ssl_key', default=os.path.join(os.path.dirname(__file__), 'ssl', 'diffido_key.pem'),
             help='specify the SSL private key to use for secure connections')
     define('admin-email', default='', help='email address of the site administrator', type=str)
+    define('email-template', default=DEFAULT_EMAIL_TEMPLATE,
+           help='file with the template of the email sent when a page changes', type=str)
+    define('email-error-template', default=DEFAULT_EMAIL_ERROR_TEMPLATE,
+           help='file with the template of the email sent when a job fails', type=str)
     define('user-agent', default='Diffido/%s (%s)' % (API_VERSION, PROJECT_URL),
            help='User-Agent header for outgoing HTTP/HTTPS requests', type=str)
     define('smtp-host', default='localhost', help='SMTP server address', type=str)
@@ -1021,6 +1105,8 @@ def serve():
     tornado.options.parse_command_line()
     if options.admin_email:
         EMAIL_FROM = options.admin_email
+    EMAIL_TEMPLATE = options.email_template
+    EMAIL_ERROR_TEMPLATE = options.email_error_template
 
     for key, value in options.as_dict().items():
         if key.startswith('smtp-'):

@@ -1,0 +1,6 @@
+Subject: $title page changed
+Schedule: $id$title_suffix
+URL: $url
+Change: $insertions insertion(s), $deletions deletion(s) out of $previous_lines previous line(s)
+$previous_revision_line$current_revision_line$date_line$xpath_line$minimum_change_line
+The unified diff is attached to this email.

@@ -56,6 +56,49 @@ Each schedule has its own web page GUI; the settings should be pretty self-expla
 When a watched page changes (and the change is above the configured *minimum change*), Diffido sends an email to the address configured for the schedule. The message body reports the schedule ID and title, the monitored URL, the number of insertions and deletions, the Git revisions involved and the date of the change; the unified diff is sent as a `.diff` attachment instead of being embedded in the body. Errors encountered while running a job are reported to the *admin_email* address (or to the configured SMTP username).
 
 
+## Email templates
+
+The emails are built from two templates, both editable:
+
+- *conf/email_template.txt*: notification sent when a page changes (change the *email_template* setting to use a different file)
+- *conf/email_error_template.txt*: notification sent when a job fails (change the *email_error_template* setting to use a different file)
+
+Both files are read every time an email is sent, so changes take effect without restarting the server. If a file is missing or unreadable, the built-in template is used.
+
+The first line of a template is the subject of the email, when it starts with `Subject:`; all the remaining lines are the body. Placeholders use `$name` syntax and are expanded with the values of the schedule and of the change that triggered the email; unknown placeholders are left untouched.
+
+Placeholders available in *conf/email_template.txt*:
+
+- `$id`: ID of the schedule
+- `$title`: title of the schedule (or *diffido*, when not set)
+- `$title_suffix`: ` - <title>`, when the schedule has a title
+- `$url`: monitored URL
+- `$insertions`, `$deletions`: number of inserted and deleted lines
+- `$changes`: number of changed lines
+- `$previous_lines`: number of lines of the previous revision
+- `$previous_revision`, `$current_revision`: Git revisions involved
+- `$date`: date of the change
+- `$xpath`: XPath selector of the schedule, when set
+- `$minimum_change`: minimum change of the schedule, when set
+- `$previous_revision_line`, `$current_revision_line`, `$date_line`, `$xpath_line`, `$minimum_change_line`: the corresponding line (including the newline), when the value is set, or an empty string
+
+Placeholders available in *conf/email_error_template.txt*:
+
+- `$id`: ID of the schedule
+- `$url`: monitored URL, when set
+- `$url_suffix`: ` (<url>)`, when the schedule has a URL
+- `$error`: the error that prevented the job from running
+
+For example, a minimal change notification template is:
+
+```
+Subject: $title changed ($changes lines)
+$url
+$current_revision_line
+The unified diff is attached to this email.
+```
+
+
 # Development
 
 See the *docs/DEVELOPMENT.md* file for more information about how to contribute.

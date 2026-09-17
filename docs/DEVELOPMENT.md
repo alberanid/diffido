@@ -21,6 +21,7 @@ Information are stored in:
 - **conf/diffido.conf**: global options (Python syntax), can also be passed on the command line
 - **conf/schedules.json**: the JSON file used to store the schedules settings
 - **conf/jobs.db**: SQLite database used by APScheduler
+- **conf/email_template.txt**, **conf/email_error_template.txt**: templates of the notification emails (see the README)
 - **storage/**: git repositories, one for each schedule
 
 
