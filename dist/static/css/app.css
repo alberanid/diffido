@@ -47,6 +47,9 @@ footer { padding: 0 16px 28px; color: var(--muted); font-size: .85rem; text-alig
 .diff-view-button + .diff-view-button { border-left: 1px solid var(--border, #2a3550); }
 .diff-view-button.active { background: var(--accent, #3b82f6); color: #fff; }
 .diff-truncated-notice { margin: 0 0 16px; padding: 8px 12px; border-radius: 8px; background: #fff7e6; color: #8a6d1a; }
+.diff-file-nav { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; }
+.diff-file-nav[hidden] { display: none; }
+.diff-file-select { max-width: 40%; }
 .diff-output { max-height: 70vh; margin: 0; padding: 14px; border-radius: 10px; background: #f4f6fa; overflow: auto; }
 .diff-output table { width: auto; table-layout: fixed; }
 .diff-output th, .diff-output td { padding: 0; border: 0; white-space: nowrap; text-transform: none; letter-spacing: 0; }

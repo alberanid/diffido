@@ -8,6 +8,11 @@
     <header class="page-header"><div><p class="eyebrow">Revision comparison</p><h1>Diff</h1></div><a class="button secondary back-history" href="/"><span class="material-icons" aria-hidden="true">arrow_back</span>History</a></header>
     <p class="status" role="status" aria-live="polite"></p>
     <p class="diff-truncated-notice" hidden></p>
+    <div class="diff-file-nav" hidden>
+        <button type="button" class="diff-file-prev" aria-label="Previous file"><span class="material-icons" aria-hidden="true">chevron_left</span></button>
+        <select class="diff-file-select" aria-label="File"></select>
+        <button type="button" class="diff-file-next" aria-label="Next file"><span class="material-icons" aria-hidden="true">chevron_right</span></button>
+    </div>
     <div class="diff-view-toggle" role="group" aria-label="Diff view mode">
         <button type="button" class="diff-view-button active" data-mode="line-by-line">Unified</button>
         <button type="button" class="diff-view-button" data-mode="side-by-side">Side by side</button>

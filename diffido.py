@@ -52,7 +52,7 @@ from tornado import gen, escape
 
 
 JOBS_STORE = 'sqlite:///conf/jobs.db'
-VERSION = '5.0'
+VERSION = '6.0'
 API_VERSION = '1.0'
 PROJECT_URL = 'https://github.com/alberanid/diffido'
 SCHEDULES_FILE = 'conf/schedules.json'
@@ -323,7 +323,8 @@ def run_job(id_=None, force=False, *args, **kwargs):
         if change_fraction < min_change:
             return True
     # send notification
-    diff = get_diff(id_).get('diff')
+    diff_data = get_diff(id_)
+    diff = '\n'.join(f['diff'] for f in diff_data.get('files') or [])
     if not diff:
         return True
     history = get_history(id_, limit=2).get('history') or []
@@ -730,6 +731,62 @@ def get_last_change(id_):
     return {}
 
 
+def _parse_diff_files(diff_text, max_lines):
+    """Split a git diff output into per-file chunks.
+
+    Each chunk starts at a ``diff --git`` header line.  Lines are counted
+    across all chunks, so the total output is capped at max_lines: when the
+    cap is hit mid-file, that file is marked ``truncated`` and the remaining
+    files are dropped.
+
+    :param diff_text: the full git diff output
+    :type diff_text: str
+    :param max_lines: maximum total number of diff lines returned
+    :type max_lines: int
+    :returns: per-file diff chunks, shown line count and total line count
+    :rtype: tuple(list(dict), int, int)"""
+    files = []
+    total_lines = 0
+    shown_lines = 0
+    current = None
+    full = False
+    for line in diff_text.splitlines():
+        if line.startswith('diff --git '):
+            if current is not None:
+                if not current['name']:
+                    current['name'] = current.get('header_name') or 'unknown file'
+                files.append(current)
+            current = None if full else {'name': '', 'diff': line + '\n'}
+            if current is not None:
+                parts = line.split(' b/', 1)
+                if len(parts) == 2:
+                    current['header_name'] = parts[1]
+            continue
+        if current is None:
+            continue
+        if line.startswith('--- a/') and not current['name']:
+            current['name'] = line[6:]
+            continue
+        if line.startswith('+++ /dev/null'):
+            # deleted file: the name was taken from the --- line
+            continue
+        if line.startswith('+++ b/') and not current['name']:
+            current['name'] = line[6:]
+            continue
+        if full:
+            total_lines += 1
+            continue
+        current['diff'] += line + '\n'
+        total_lines += 1
+        shown_lines += 1
+        if shown_lines >= max_lines:
+            current['truncated'] = True
+            full = True
+    if current is not None:
+        files.append(current)
+    return files, shown_lines, total_lines
+
+
 def get_diff(id_, commit_id='HEAD', old_commit_id=None):
     """Return the diff between commits of a schedule
 
@@ -739,9 +796,10 @@ def get_diff(id_, commit_id='HEAD', old_commit_id=None):
     :type commit_id: str
     :param old_commit_id: the older commit ID; if None, the previous commit is used
     :type old_commit_id: str
-    :returns: information about the schedule and the diff between commits; if the
-              diff is longer than MAX_DIFF_LINES lines, it is truncated and the
-              ``truncated`` flag is set (with ``total_lines`` and ``shown_lines``)
+    :returns: information about the schedule and the per-file diff chunks; if the
+              diff is longer than MAX_DIFF_LINES lines, it is truncated (the last
+              shown file is flagged) and the ``truncated`` flag is set (with
+              ``total_lines`` and ``shown_lines``)
     :rtype: dict"""
     cmd = [GIT_CMD, 'diff', old_commit_id or '%s~' % commit_id, commit_id]
     queue = multiprocessing.Queue()
@@ -753,12 +811,11 @@ def get_diff(id_, commit_id='HEAD', old_commit_id=None):
     if returncode != 0:
         message = stderr.decode('utf-8', 'replace').strip() or 'git diff exited with code %s' % returncode
         logger.warning('unable to get diff of %s for schedule %s: %s' % (commit_id, id_, message))
-        return {'diff': '', 'error': message, 'schedule': schedule}
-    lines = res.decode('utf-8', 'replace').splitlines()
-    truncated = len(lines) > MAX_DIFF_LINES
-    data = {'diff': '\n'.join(lines[:MAX_DIFF_LINES]), 'schedule': schedule}
-    if truncated:
-        data.update(truncated=True, total_lines=len(lines), shown_lines=MAX_DIFF_LINES)
+        return {'files': [], 'error': message, 'schedule': schedule}
+    files, shown_lines, total_lines = _parse_diff_files(res.decode('utf-8', 'replace'), MAX_DIFF_LINES)
+    data = {'files': files, 'schedule': schedule}
+    if shown_lines >= MAX_DIFF_LINES:
+        data.update(truncated=True, total_lines=total_lines, shown_lines=shown_lines)
     return data
 
 

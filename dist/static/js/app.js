@@ -173,24 +173,44 @@
             page.querySelector("h1").textContent = `${data.schedule.title || "Schedule"} diff`;
             const output = page.querySelector(".diff-output");
             const notice = page.querySelector(".diff-truncated-notice");
+            const fileNav = page.querySelector(".diff-file-nav");
+            const fileSelect = page.querySelector(".diff-file-select");
+            const files = data.files || [];
             if (data.truncated) {
                 notice.textContent = `Output truncated: showing the first ${data.shown_lines} of ${data.total_lines} diff lines.`;
                 notice.hidden = false;
             }
             const rendered = {};
-            const render = mode => {
-                output.innerHTML = rendered[mode] || (rendered[mode] = Diff2Html.getPrettyHtml(data.diff, { outputFormat: mode }));
+            let current = 0;
+            let mode = "line-by-line";
+            const render = () => {
+                const file = files[current];
+                const key = `${current}:${mode}`;
+                output.innerHTML = rendered[key] || (rendered[key] = Diff2Html.getPrettyHtml(file.diff, { outputFormat: mode }));
             };
-            if (!data.diff) {
+            if (!files.length) {
                 output.textContent = "No differences.";
                 page.querySelector(".diff-view-toggle").hidden = true;
             } else {
-                render("line-by-line");
+                if (files.length > 1) {
+                    fileNav.hidden = false;
+                    fileSelect.innerHTML = files.map((file, index) => `<option value="${index}">${escape(file.name || "unknown file")}</option>`).join("");
+                    const goto = index => {
+                        current = Math.min(Math.max(index, 0), files.length - 1);
+                        fileSelect.value = current;
+                        render();
+                    };
+                    fileSelect.addEventListener("change", () => goto(Number(fileSelect.value)));
+                    page.querySelector(".diff-file-prev").addEventListener("click", () => goto(current - 1));
+                    page.querySelector(".diff-file-next").addEventListener("click", () => goto(current + 1));
+                }
+                render();
             }
             page.querySelectorAll(".diff-view-button").forEach(button => {
                 button.addEventListener("click", () => {
                     page.querySelectorAll(".diff-view-button").forEach(other => other.classList.toggle("active", other === button));
-                    render(button.dataset.mode);
+                    mode = button.dataset.mode;
+                    if (files.length) render();
                 });
             });
         } catch (error) { showStatus(error.message, true); }
