@@ -47,6 +47,7 @@ from tornado import gen, escape
 
 JOBS_STORE = 'sqlite:///conf/jobs.db'
 API_VERSION = '1.0'
+PROJECT_URL = 'https://github.com/alberanid/diffido'
 SCHEDULES_FILE = 'conf/schedules.json'
 DEFAULT_CONF = 'conf/diffido.conf'
 EMAIL_FROM = 'diffido@localhost'
@@ -171,6 +172,20 @@ def select_xpath(content, xpath):
     return content
 
 
+def user_agent():
+    """Return the User-Agent header value for outgoing HTTP/HTTPS requests.
+
+    The value is read from the `user_agent` option, defined in the
+    configuration file (conf/diffido.conf, see `DEFAULT_CONF`), and should
+    follow the Wikimedia Foundation User-Agent Policy
+    (https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy),
+    i.e. `<client name>/<version> (<contact information>) <library>/<version>`.
+
+    :returns: the User-Agent header value
+    :rtype: str"""
+    return getattr(options, 'user_agent', '')
+
+
 def run_job(id_=None, force=False, *args, **kwargs):
     """Run a job
 
@@ -192,7 +207,8 @@ def run_job(id_=None, force=False, *args, **kwargs):
     if not schedule.get('enabled') and not force:
         logger.info('not running job %s: disabled' % id_)
         return True
-    req = requests.get(url, allow_redirects=True, timeout=(30.10, 240))
+    req = requests.get(url, headers={'User-Agent': user_agent()},
+                       allow_redirects=True, timeout=(30.10, 240))
     content = req.text
     xpath = schedule.get('xpath')
     if xpath:
@@ -751,6 +767,8 @@ def serve():
     define('ssl_key', default=os.path.join(os.path.dirname(__file__), 'ssl', 'diffido_key.pem'),
             help='specify the SSL private key to use for secure connections')
     define('admin-email', default='', help='email address of the site administrator', type=str)
+    define('user-agent', default='Diffido/%s (%s)' % (API_VERSION, PROJECT_URL),
+           help='User-Agent header for outgoing HTTP/HTTPS requests', type=str)
     define('smtp-host', default='localhost', help='SMTP server address', type=str)
     define('smtp-port', default=0, help='SMTP server port', type=int)
     define('smtp-local-hostname', default=None, help='SMTP local hostname', type=str)

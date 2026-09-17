@@ -42,6 +42,8 @@ You can also **run the server in https**, putting in the *ssl* directory two fil
 
 You can edit the *conf/diffido.conf* file (Python syntax) to change the global settings; you almost surely have to configure the SMTP settings, at least.
 
+The *user_agent* setting is the `User-Agent` header sent with the requests used to check pages; its format should follow the [Wikimedia Foundation User-Agent Policy](https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy) (`<client name>/<version> (<contact information>) <library>/<version>`).
+
 Each schedule has its own web page GUI; the settings should be pretty self-explanatory, except:
 
 - **XPath selector**: define which portion of a web page to consider
