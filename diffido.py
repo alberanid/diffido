@@ -246,7 +246,7 @@ def _commit_job(id_, filename, content, queue):
         fd.write(content)
     p = subprocess.Popen([GIT_CMD, 'add', filename])
     p.communicate()
-    p = subprocess.Popen([GIT_CMD, 'commit', '-m', '%s' % datetime.datetime.utcnow(), '--allow-empty'],
+    p = subprocess.Popen([GIT_CMD, 'commit', '-m', '%s' % datetime.datetime.now(datetime.timezone.utc), '--allow-empty'],
                          stdout=subprocess.PIPE)
     stdout, _ = p.communicate()
     stdout = stdout.decode('utf-8')
