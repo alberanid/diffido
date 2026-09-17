@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Diffido - because the F5 key is a terrible thing to waste.
 
-Copyright 2018 Davide Alberani <da@mimante.net>
+Copyright 2018-2026 Davide Alberani <da@mimante.net>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ from tornado import gen, escape
 
 
 JOBS_STORE = 'sqlite:///conf/jobs.db'
-VERSION = '4.0'
+VERSION = '5.0'
 API_VERSION = '1.0'
 PROJECT_URL = 'https://github.com/alberanid/diffido'
 SCHEDULES_FILE = 'conf/schedules.json'
