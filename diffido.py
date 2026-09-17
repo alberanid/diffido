@@ -23,6 +23,9 @@ import shutil
 import smtplib
 from urllib.parse import urlparse
 from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.encoders import encode_base64
 from email.utils import formatdate
 import logging
 import datetime
@@ -293,9 +296,54 @@ def run_job(id_=None, force=False, *args, **kwargs):
     diff = get_diff(id_).get('diff')
     if not diff:
         return True
-    send_email(to=email, subject='%s page changed' % schedule.get('title'),
-               body='changes:\n\n%s' % diff)
+    history = get_history(id_, limit=2).get('history') or []
+    revision = history[0] if history else {}
+    old_revision = history[1] if len(history) > 1 else {}
+    subject, body = build_change_email(id_, schedule, res, revision, old_revision)
+    attachment_name = 'diff-%s.diff' % revision.get('id', 'HEAD')[:12]
+    attachments = [(attachment_name, diff, 'text/x-patch')]
+    send_email(to=email, subject=subject, body=body, attachments=attachments)
     return True
+
+
+def build_change_email(id_, schedule, result, revision=None, old_revision=None):
+    """Build subject and body of the notification email sent when a page changed.
+
+    :param id_: ID of the schedule
+    :type id_: str
+    :param schedule: the schedule that detected the change
+    :type schedule: dict
+    :param result: dictionary with the number of insertions, deletions,
+                   changes and previous lines
+    :type result: dict
+    :param revision: the current history entry of the schedule
+    :type revision: dict
+    :param old_revision: the previous history entry of the schedule
+    :type old_revision: dict
+    :returns: tuple with the subject and the body of the email
+    :rtype: tuple"""
+    revision = revision or {}
+    old_revision = old_revision or {}
+    title = schedule.get('title') or 'diffido'
+    subject = '%s page changed' % title
+    lines = ['Schedule: %s%s' % (id_, ' - %s' % title if schedule.get('title') else ''),
+             'URL: %s' % schedule.get('url'),
+             'Change: %s insertion(s), %s deletion(s) out of %s previous line(s)' % (
+                 result.get('insertions', 0), result.get('deletions', 0),
+                 result.get('previous_lines', 0))]
+    if old_revision.get('id'):
+        lines.append('Previous revision: %s' % old_revision['id'])
+    if revision.get('id'):
+        lines.append('Current revision:  %s' % revision['id'])
+    if revision.get('message'):
+        lines.append('Date: %s' % revision['message'])
+    if schedule.get('xpath'):
+        lines.append('XPath selector: %s' % schedule['xpath'])
+    if schedule.get('minimum_change'):
+        lines.append('Minimum change: %s' % schedule['minimum_change'])
+    lines.append('')
+    lines.append('The unified diff is attached to this email.')
+    return subject, '\n'.join(lines)
 
 
 def safe_run_job(id_=None, *args, **kwargs):
@@ -314,11 +362,13 @@ def safe_run_job(id_=None, *args, **kwargs):
     except Exception as e:
         recipient = SMTP_SETTINGS.get('smtp-username') or EMAIL_FROM
         subject = 'diffido job error'
-        body = 'error executing job %s: %s' % (id_, e)
+        schedule = get_schedule(id_, add_id=False)
+        url = ' (%s)' % schedule['url'] if schedule.get('url') else ''
+        body = 'error executing job %s%s: %s' % (id_, url, e)
         send_email(to=recipient, subject=subject, body=body)
 
 
-def send_email(to, subject='diffido', body='', from_=None):
+def send_email(to, subject='diffido', body='', from_=None, attachments=None):
     """Send an email
 
     :param to: destination address
@@ -329,9 +379,22 @@ def send_email(to, subject='diffido', body='', from_=None):
     :type body: str
     :param from_: sender address
     :type from_: str
+    :param attachments: sequence of (filename, content, mimetype) tuples
+    :type attachments: list
     :returns: True in case of success
     :rtype: bool"""
-    msg = MIMEText(body)
+    if attachments:
+        msg = MIMEMultipart()
+        msg.attach(MIMEText(body))
+        for filename, content, mimetype in attachments:
+            maintype, _, subtype = mimetype.partition('/')
+            part = MIMEBase(maintype, subtype or 'octet-stream')
+            part.set_payload(content.encode('utf-8') if isinstance(content, str) else content)
+            encode_base64(part)
+            part.add_header('Content-Disposition', 'attachment', filename=filename)
+            msg.attach(part)
+    else:
+        msg = MIMEText(body)
     msg['Subject'] = subject
     msg['From'] = from_ or EMAIL_FROM
     msg['To'] = to

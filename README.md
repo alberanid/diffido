@@ -51,6 +51,11 @@ Each schedule has its own web page GUI; the settings should be pretty self-expla
 - **crontab**: a complete crontab definition, to specify the period of the check
 
 
+# Notifications
+
+When a watched page changes (and the change is above the configured *minimum change*), Diffido sends an email to the address configured for the schedule. The message body reports the schedule ID and title, the monitored URL, the number of insertions and deletions, the Git revisions involved and the date of the change; the unified diff is sent as a `.diff` attachment instead of being embedded in the body. Errors encountered while running a job are reported to the *admin_email* address (or to the configured SMTP username).
+
+
 # Development
 
 See the *docs/DEVELOPMENT.md* file for more information about how to contribute.
