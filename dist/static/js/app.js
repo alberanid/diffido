@@ -171,7 +171,23 @@
         try {
             const data = await api(`schedules/${encodeURIComponent(id)}/diff/${encodeURIComponent(diff)}/${encodeURIComponent(oldid || "")}`);
             page.querySelector("h1").textContent = `${data.schedule.title || "Schedule"} diff`;
-            page.querySelector(".diff-output").textContent = data.diff || "No differences.";
+            const output = page.querySelector(".diff-output");
+            const rendered = {};
+            const render = mode => {
+                output.innerHTML = rendered[mode] || (rendered[mode] = Diff2Html.getPrettyHtml(data.diff, { outputFormat: mode }));
+            };
+            if (!data.diff) {
+                output.textContent = "No differences.";
+                page.querySelector(".diff-view-toggle").hidden = true;
+            } else {
+                render("line-by-line");
+            }
+            page.querySelectorAll(".diff-view-button").forEach(button => {
+                button.addEventListener("click", () => {
+                    page.querySelectorAll(".diff-view-button").forEach(other => other.classList.toggle("active", other === button));
+                    render(button.dataset.mode);
+                });
+            });
         } catch (error) { showStatus(error.message, true); }
     };
 

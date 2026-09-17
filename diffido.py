@@ -38,6 +38,7 @@ from lxml import etree
 from xml.etree import ElementTree
 
 from tornado.ioloop import IOLoop
+from tornado import web
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.schedulers.tornado import TornadoScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -622,16 +623,16 @@ def _run_git_in_dir(id_, cmd, queue):
     :type id_: str
     :param cmd: the git command to run
     :type cmd: list
-    :param queue: queue used to send back the output
+    :param queue: queue used to send back a (returncode, stdout, stderr) tuple
     :type queue: multiprocessing.Queue"""
     try:
         os.chdir('storage/%s' % id_)
     except Exception as e:
         logger.info('unable to move to storage/%s directory: %s' % (id_, e))
-        return queue.put(b'')
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    stdout, _ = p.communicate()
-    queue.put(stdout)
+        return queue.put((1, b'', b''))
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = p.communicate()
+    queue.put((p.returncode, stdout, stderr))
 
 
 def get_history(id_, limit=None, offset=0, add_info=False, show_empty=True):
@@ -660,8 +661,9 @@ def get_history(id_, limit=None, offset=0, add_info=False, show_empty=True):
     queue = multiprocessing.Queue()
     p = multiprocessing.Process(target=_run_git_in_dir, args=(id_, cmd, queue))
     p.start()
-    res = queue.get().decode('utf-8')
+    returncode, res, _ = queue.get()
     p.join()
+    res = res.decode('utf-8')
     history = []
     for match in re_commit.finditer(res):
         info = match.groupdict()
@@ -680,7 +682,8 @@ def get_history(id_, limit=None, offset=0, add_info=False, show_empty=True):
         p = multiprocessing.Process(target=_run_git_in_dir, args=(id_, [GIT_CMD, 'rev-list', '--count', 'HEAD'], count_queue))
         p.start()
         try:
-            total = int(count_queue.get().decode('utf-8').strip() or 0)
+            _rc, count_output, _err = count_queue.get()
+            total = int(count_output.decode('utf-8').strip() or 0)
         except (ValueError, UnicodeDecodeError):
             total = 0
         p.join()
@@ -739,10 +742,14 @@ def get_diff(id_, commit_id='HEAD', old_commit_id=None):
     queue = multiprocessing.Queue()
     p = multiprocessing.Process(target=_run_git_in_dir, args=(id_, cmd, queue))
     p.start()
-    res = queue.get().decode('utf-8')
+    returncode, res, stderr = queue.get()
     p.join()
     schedule = get_schedule(id_)
-    return {'diff': res, 'schedule': schedule}
+    if returncode != 0:
+        message = stderr.decode('utf-8', 'replace').strip() or 'git diff exited with code %s' % returncode
+        logger.warning('unable to get diff of %s for schedule %s: %s' % (commit_id, id_, message))
+        return {'diff': '', 'error': message, 'schedule': schedule}
+    return {'diff': res.decode('utf-8'), 'schedule': schedule}
 
 
 def _read_revision(id_, commit_id, queue):
@@ -756,32 +763,29 @@ def _read_revision(id_, commit_id, queue):
     :type id_: str
     :param commit_id: the revision to read
     :type commit_id: str
-    :param queue: queue used to send back the list of files
+    :param queue: queue used to send back a ('ok', files) or ('error', '') tuple
     :type queue: multiprocessing.Queue"""
     try:
         os.chdir('storage/%s' % id_)
     except Exception as e:
         logger.info('unable to move to storage/%s directory: %s' % (id_, e))
-        return queue.put(None)
-    try:
-        p = subprocess.Popen([GIT_CMD, 'ls-tree', '-r', '--name-only', commit_id],
+        return queue.put(('error', ''))
+    p = subprocess.Popen([GIT_CMD, 'ls-tree', '-r', '--name-only', commit_id],
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = p.communicate()
+    if p.returncode != 0:
+        logger.warning('unable to read revision %s of schedule %s: %s' % (commit_id, id_, stderr.decode('utf-8', 'replace').strip()))
+        return queue.put(('error', ''))
+    files = []
+    for filename in stdout.decode('utf-8').splitlines():
+        if not filename:
+            continue
+        p = subprocess.Popen([GIT_CMD, 'show', '%s:%s' % (commit_id, filename)],
                              stdout=subprocess.PIPE)
-        stdout, _ = p.communicate()
-        if p.returncode != 0:
-            return queue.put(None)
-        files = []
-        for filename in stdout.decode('utf-8').splitlines():
-            if not filename:
-                continue
-            p = subprocess.Popen([GIT_CMD, 'show', '%s:%s' % (commit_id, filename)],
-                                 stdout=subprocess.PIPE)
-            content, _ = p.communicate()
-            files.append({'name': filename,
-                          'content': content.decode('utf-8', 'replace') if p.returncode == 0 else ''})
-    except Exception as e:
-        logger.error('unable to read revision %s of schedule %s: %s' % (commit_id, id_, e))
-        return queue.put(None)
-    queue.put(files)
+        content, _ = p.communicate()
+        files.append({'name': filename,
+                      'content': content.decode('utf-8', 'replace') if p.returncode == 0 else ''})
+    queue.put(('ok', files))
 
 
 def get_revision(id_, commit_id='HEAD'):
@@ -797,9 +801,11 @@ def get_revision(id_, commit_id='HEAD'):
     queue = multiprocessing.Queue()
     p = multiprocessing.Process(target=_read_revision, args=(id_, commit_id, queue))
     p.start()
-    files = queue.get()
+    status, files = queue.get()
     p.join()
     schedule = get_schedule(id_)
+    if status == 'error':
+        return {'revision': {'id': commit_id, 'files': []}, 'error': 'Unknown revision "%s"' % commit_id, 'schedule': schedule}
     return {'revision': {'id': commit_id, 'files': files or []}, 'schedule': schedule}
 
 
@@ -1131,14 +1137,24 @@ class DiffHandler(BaseHandler):
     """Diff handler."""
     @gen.coroutine
     def get(self, id_, commit_id, old_commit_id=None, *args, **kwargs):
-        self.write(get_diff(id_, commit_id, old_commit_id))
+        data = get_diff(id_, commit_id, old_commit_id)
+        if data.get('error'):
+            self.set_status(404)
+            self.write({'message': 'Unknown revision "%s": %s' % (commit_id, data['error'])})
+            return
+        self.write(data)
 
 
 class RevisionHandler(BaseHandler):
     """Revision handler."""
     @gen.coroutine
     def get(self, id_, commit_id='HEAD', *args, **kwargs):
-        self.write(get_revision(id_, commit_id))
+        data = get_revision(id_, commit_id)
+        if data.get('error'):
+            self.set_status(404)
+            self.write({'message': data['error']})
+            return
+        self.write(data)
 
 
 class TemplateHandler(BaseHandler):
@@ -1149,6 +1165,9 @@ class TemplateHandler(BaseHandler):
         page = 'index.html'
         if args and args[0]:
             page = args[0].strip('/')
+        path = os.path.join(self.application.settings['template_path'], page)
+        if not os.path.isfile(path):
+            raise web.HTTPError(404)
         arguments = self.arguments
         arguments.setdefault('version', VERSION)
         self.render(page, **arguments)
@@ -1217,8 +1236,8 @@ def serve():
     _schedule_run_path = r'schedules/(?P<id_>\d+)/run'
     _schedules_path = r'schedules/?(?P<id_>\d+)?'
     _history_path = r'schedules/?(?P<id_>\d+)/history'
-    _diff_path = r'schedules/(?P<id_>\d+)/diff/(?P<commit_id>[0-9a-f]+)/?(?P<old_commit_id>[0-9a-f]+)?/?'
-    _revision_path = r'schedules/(?P<id_>\d+)/revision/?(?P<commit_id>[0-9a-f]+)?'
+    _diff_path = r'schedules/(?P<id_>\d+)/diff/(?P<commit_id>[0-9a-f]{7,40}|HEAD~?)/?(?P<old_commit_id>[0-9a-f]{7,40})?/?'
+    _revision_path = r'schedules/(?P<id_>\d+)/revision/?(?P<commit_id>(?:[0-9a-f]{7,40}|HEAD~?))?/?'
     application = tornado.web.Application([
             (r'/api/%s' % _reset_schedules_path, ResetSchedulesHandler, init_params),
             (r'/api/v%s/%s' % (API_VERSION, _reset_schedules_path), ResetSchedulesHandler, init_params),
