@@ -53,7 +53,7 @@ from tornado import gen, escape
 
 
 JOBS_STORE = 'sqlite:///conf/jobs.db'
-VERSION = '8.0'
+VERSION = '9.0'
 API_VERSION = '1.0'
 PROJECT_URL = 'https://github.com/alberanid/diffido'
 SCHEDULES_FILE = 'conf/schedules.json'
