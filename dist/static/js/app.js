@@ -19,6 +19,26 @@
         status.textContent = message;
         status.classList.toggle("error", isError);
     };
+    const TOAST_KEY = "diffido-toast";
+    const toast = document.querySelector(".toast");
+    const showToast = (message = "", isError = false) => {
+        if (!toast) return;
+        toast.textContent = message;
+        toast.classList.toggle("error", isError);
+        toast.classList.add("visible");
+        clearTimeout(showToast.timer);
+        showToast.timer = setTimeout(() => toast.classList.remove("visible"), 3000);
+    };
+    const queueToast = message => {
+        try { sessionStorage.setItem(TOAST_KEY, message); } catch (_) {}
+    };
+    if (toast) {
+        toast.addEventListener("click", () => { clearTimeout(showToast.timer); toast.classList.remove("visible"); });
+        try {
+            const pending = sessionStorage.getItem(TOAST_KEY);
+            if (pending !== null) { sessionStorage.removeItem(TOAST_KEY); showToast(pending); }
+        } catch (_) {}
+    }
     const date = value => (value || "").split(".")[0] || "Never";
     const escape = value => String(value ?? "").replace(/[&<>"']/g, character => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -91,8 +111,8 @@
             const button = event.target.closest("[data-run]");
             if (!button) return;
             button.disabled = true;
-            try { await api(`schedules/${encodeURIComponent(button.dataset.run)}/run`, {method: "POST"}); showStatus("Schedule started."); }
-            catch (error) { showStatus(error.message, true); }
+            try { await api(`schedules/${encodeURIComponent(button.dataset.run)}/run`, {method: "POST"}); showToast("Schedule started."); }
+            catch (error) { showToast(error.message, true); }
             finally { button.disabled = false; }
         });
     };
@@ -147,13 +167,14 @@
                 await api(id ? `schedules/${encodeURIComponent(id)}` : "schedules", {
                     method: id ? "PUT" : "POST", body: JSON.stringify(data),
                 });
+                queueToast("Schedule saved.");
                 window.location.assign("/");
-            } catch (error) { showStatus(error.message, true); }
+            } catch (error) { showToast(error.message, true); }
         });
         remove.addEventListener("click", async () => {
             if (!window.confirm("Delete this schedule and its stored history?")) return;
-            try { await api(`schedules/${encodeURIComponent(id)}`, {method: "DELETE"}); window.location.assign("/"); }
-            catch (error) { showStatus(error.message, true); }
+            try { await api(`schedules/${encodeURIComponent(id)}`, {method: "DELETE"}); queueToast("Schedule deleted."); window.location.assign("/"); }
+            catch (error) { showToast(error.message, true); }
         });
     };
 

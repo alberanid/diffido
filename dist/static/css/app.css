@@ -26,6 +26,9 @@ h1 { margin: 0; font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -.03em; }
 .button .material-icons { font-size: 20px; }
 .row-actions .button { padding-left: 9px; padding-right: 9px; }
 .status { min-height: 1.25rem; margin: 0 0 16px; color: var(--muted); } .status.error { color: var(--danger); }
+.toast { position: fixed; right: 20px; bottom: 20px; z-index: 10; max-width: min(360px, calc(100vw - 40px)); padding: 12px 18px; border-radius: 10px; background: #172033; color: #eaf0fb; font-weight: 600; box-shadow: 0 8px 24px rgba(24, 34, 48, .2); opacity: 0; transform: translateY(8px); transition: opacity .2s, transform .2s; pointer-events: none; cursor: pointer; }
+.toast.visible { opacity: 1; transform: none; pointer-events: auto; }
+.toast.error { background: var(--danger); }
 .table-wrap { overflow-x: auto; }
 .pagination { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
 .pagination:empty { display: none; }
