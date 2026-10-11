@@ -11,3 +11,6 @@ ssl/*.pem
 .editorconfig
 .codegraph
 .omp
+
+.venv/
+dist/static/vendor/

@@ -1,0 +1,13 @@
+.git
+.codegraph
+.omp
+.agents
+.codex
+.aws
+node_modules
+.venv
+__pycache__
+storage
+conf
+ssl/*.pem
+dist/static/vendor

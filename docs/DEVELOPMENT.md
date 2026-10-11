@@ -1,5 +1,11 @@
 # Diffido development
 
+## Setup
+
+Follow the installation steps in the README. Frontend libraries are installed
+with `npm ci --ignore-scripts` and published locally with `npm run build`; see
+[dependencies and distribution](DEPENDENCIES.md) for ownership and update rules.
+
 ## API
 
 - /api/schedules GET - the list of all schedules

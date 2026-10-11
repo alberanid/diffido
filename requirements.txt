@@ -1,0 +1,7 @@
+# APScheduler 4 changes the scheduler/job-store APIs used by diffido.py.
+APScheduler>=3.10,<4
+lxml>=4.9,<7
+pytz>=2023.3
+requests>=2.31,<3
+SQLAlchemy>=1.4,<3
+tornado>=6.3,<7

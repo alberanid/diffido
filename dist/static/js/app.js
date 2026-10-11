@@ -225,7 +225,7 @@
             const render = () => {
                 const file = files[current];
                 const key = `${current}:${mode}`;
-                output.innerHTML = rendered[key] || (rendered[key] = Diff2Html.getPrettyHtml(file.diff, { outputFormat: mode }));
+                output.innerHTML = rendered[key] || (rendered[key] = Diff2Html.html(file.diff, { outputFormat: mode }));
             };
             if (!files.length) {
                 output.textContent = "No differences.";

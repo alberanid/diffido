@@ -16,22 +16,22 @@ Just run:
 
 ## Old-fashioned installation
 
-To install it:
-``` bash
-wget https://bootstrap.pypa.io/get-pip.py
-sudo python3 get-pip.py
-# if you want to install these modules for an unprivileged user, add --user and remove "sudo";
-# if you want to upgrade the versions already present in the system, also add --upgrade
-sudo pip3 install lxml
-sudo pip3 install pytz
-sudo pip3 install apscheduler
-sudo pip3 install requests
-sudo pip3 install sqlalchemy
-sudo pip3 install tornado
+Install Python 3, Git and Node.js 22 (with npm), then run:
+
+```bash
 git clone https://github.com/alberanid/diffido
 cd diffido
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.txt
+npm ci --ignore-scripts
+npm run build
 ./diffido.py --debug
 ```
+
+Node.js is needed only to prepare frontend assets. The running server and browser
+need no npm registry or CDN access. Re-run `npm run build` after updating frontend
+dependencies. See [dependency and distribution notes](docs/DEPENDENCIES.md).
 
 Now you can **point your browser to [http://localhost:3210/](http://localhost:3210/)**
 
@@ -120,8 +120,9 @@ See the *docs/DEVELOPMENT.md* file for more information about how to contribute.
 
 ## Technological stack
 
-- [VueJS 2](https://vuejs.org/) for the webApp
-- [Vue Material](https://vuematerial.github.io/) for the UI components
+- Plain JavaScript and CSS for the web UI
+- [diff2html](https://github.com/rtfpessoa/diff2html) for revision comparisons
+- [Material Icons](https://github.com/jossef/material-design-icons-iconfont) for icons
 - [Tornado web](http://www.tornadoweb.org/) as web server
 - [APScheduler](https://github.com/agronholm/apscheduler) to run the scheduled jobs
 - [Python 3](https://www.python.org/)
